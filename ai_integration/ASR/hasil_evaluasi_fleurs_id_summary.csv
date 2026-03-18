@@ -1,0 +1,2 @@
+model,dataset_name,dataset_config,split,num_samples_total,num_success,num_failed,wer_raw,cer_raw,wer_cleaned,cer_cleaned,avg_latency_sec,device,compute_type,beam_size,vad_filter
+cahya/faster-whisper-medium-id,google/fleurs,id_id,test,687,687,0,0.28880407124681934,0.0679695404441131,0.0865462587541467,0.03056079647810005,0.4995115979790167,cpu,int8,5,True
