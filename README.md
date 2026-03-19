@@ -14,7 +14,5 @@ Make sure these are installed on your machine:
 
 ```bash
 git clone https://github.com/boyjambre/vagmiAI.git
-cd vagmiAI/frontend
-docker build -t vagmiai-frontend .
-docker run -p 5173:5173 vagmiai-frontend
+docker compose up --build
 ```
