@@ -7,8 +7,25 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./ai_service/app:/app/app
+      - ./ai_service:/app
       - ./shared_data:/data
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: vagmiai_backend
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - ./shared_data:/data
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - ai_service
     restart: unless-stopped
 
   frontend:
@@ -22,5 +39,5 @@ services:
       - ./frontend:/app
       - /app/node_modules
     depends_on:
-      - ai_service
+      - backend
     restart: unless-stopped
