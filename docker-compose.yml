@@ -1,0 +1,26 @@
+services:
+  ai_service:
+    build:
+      context: ./ai_service
+      dockerfile: Dockerfile
+    container_name: vagmiai_ai_service
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./ai_service/app:/app/app
+      - ./shared_data:/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: vagmiai_frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - ai_service
+    restart: unless-stopped
