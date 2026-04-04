@@ -1,0 +1,2 @@
+samples,accuracy,precision_macro,recall_macro,f1_macro,precision_weighted,recall_weighted,f1_weighted
+5000,0.932,0.917540296949499,0.9156469722248982,0.916439842228709,0.9325653652134875,0.932,0.9321745102863237
