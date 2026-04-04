@@ -3,13 +3,13 @@ import { Link } from "react-router-dom"
 function SignUp() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] px-6 py-10 text-[#111827]">
-        <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
             <div className="absolute left-[-14rem] top-[-10rem] h-[38rem] w-[38rem] rounded-full bg-[#C9A227]/12 blur-3xl" />
             <div className="absolute right-[-12rem] top-[4rem] h-[42rem] w-[42rem] rounded-full bg-[#0F172A]/8 blur-3xl" />
             <div className="absolute bottom-[8rem] left-[10%] h-[34rem] w-[34rem] rounded-full bg-[#334155]/8 blur-3xl" />
             <div className="absolute bottom-[-10rem] right-[8%] h-[36rem] w-[36rem] rounded-full bg-[#C9A227]/10 blur-3xl" />
         </div>
-      <div className="mx-auto max-w-md">
+      <div className="relative z-10 mx-auto max-w-md">
         <Link
           to="/"
           className="mb-8 inline-flex items-center text-sm font-medium text-[#475569] transition hover:text-[#0F172A]"
@@ -50,6 +50,32 @@ function SignUp() {
               <input
                 type="email"
                 placeholder="kamu@email.com"
+                className="w-full rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-3 text-sm outline-none transition focus:border-[#C9A227]"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-[#334155]">
+                Nomor Telepon
+              </label>
+              <input
+                type="tel"
+                name="phone"
+                autoComplete="tel"
+                placeholder="08xxxxxxxxxx atau +62..."
+                className="w-full rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-3 text-sm outline-none transition focus:border-[#C9A227]"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-[#334155]">
+                Domisili
+              </label>
+              <input
+                type="text"
+                name="domicile"
+                autoComplete="address-level2"
+                placeholder="Kota atau wilayah tempat tinggal"
                 className="w-full rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-3 text-sm outline-none transition focus:border-[#C9A227]"
               />
             </div>
