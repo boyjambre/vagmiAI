@@ -1,4 +1,32 @@
 services:
+  mongo:
+    image: mongo:7
+    container_name: vagmiai_mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+    volumes:
+      - mongo_data:/data/db
+
+  mongo-express:
+    image: mongo-express:1
+    container_name: vagmiai_mongo_express
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: root
+      ME_CONFIG_MONGODB_ADMINPASSWORD: example
+      ME_CONFIG_MONGODB_URL: mongodb://mongo:27017/
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: adminpassword
+      ME_CONFIG_BASICAUTH: "true"
+    depends_on:
+      - mongo
+
   ai_service:
     build:
       context: ./ai_service
@@ -23,8 +51,11 @@ services:
       - /app/node_modules
       - ./shared_data:/data
     env_file:
-      - ./backend/.env
+      - ./.env
+    environment:
+      MONGODB_URI: mongodb://root:example@mongo:27017/vagmiai?authSource=admin
     depends_on:
+      - mongo
       - ai_service
     restart: unless-stopped
 
@@ -41,3 +72,6 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+
+volumes:
+  mongo_data:

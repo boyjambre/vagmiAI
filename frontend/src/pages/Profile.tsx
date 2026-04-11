@@ -144,7 +144,7 @@ function Profile() {
                   type="text"
                   value={form.namaLengkap}
                   onChange={(e) => setForm((f) => ({ ...f, namaLengkap: e.target.value }))}
-                  placeholder="Contoh: Fadawkas Oemarki"
+                  placeholder="Contoh: Cristiano Ronaldo"
                   className={inputClass}
                   autoComplete="name"
                 />
@@ -215,8 +215,7 @@ function Profile() {
           <section className="rounded-[32px] border border-dashed border-[#C9A227]/50 bg-gradient-to-br from-white to-[#FAF6E8]/40 p-8 shadow-sm backdrop-blur lg:p-10">
             <h2 className="text-lg font-semibold text-[#0F172A]">Unggah CV</h2>
             <p className="mt-1 text-sm text-[#64748B]">
-              CV akan digunakan untuk konteks wawancara di versi mendatang. Saat ini hanya disimpan
-              di perangkatmu (simulasi).
+              CV akan digunakan untuk konteks simulasi wawancara.
             </p>
             <input
               ref={fileInputRef}
