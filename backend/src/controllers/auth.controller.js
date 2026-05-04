@@ -78,7 +78,7 @@ export const signIn = async (req, res) => {
         email: user.email,
       },
       env.jwtSecret,
-      { expiresIn: "1d" }
+      { expiresIn: "24h" }
     );
 
     return res.status(200).json({

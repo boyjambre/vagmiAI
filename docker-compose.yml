@@ -36,7 +36,11 @@ services:
       - "8000:8000"
     volumes:
       - ./ai_service:/app
-      - ./shared_data:/data
+      - shared_data:/data
+    env_file:
+      - .env
+    environment:
+      MAX_FEM_FRAMES: "10"
     restart: unless-stopped
 
   backend:
@@ -49,11 +53,16 @@ services:
     volumes:
       - ./backend:/app
       - /app/node_modules
-      - ./shared_data:/data
+      - shared_data:/data
     env_file:
       - ./.env
     environment:
       MONGODB_URI: mongodb://root:example@mongo:27017/vagmiai?authSource=admin
+      UPLOAD_PATH: /data/cv
+      AI_SERVICE_URL: http://ai_service:8000
+      SHARED_DATA_DIR: /data
+      AGENDA_CONCURRENCY: "2"
+      GEMINI_EVAL_MODEL: google/gemini-2.5-flash
     depends_on:
       - mongo
       - ai_service
@@ -75,3 +84,4 @@ services:
 
 volumes:
   mongo_data:
+  shared_data:

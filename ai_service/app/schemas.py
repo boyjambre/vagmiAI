@@ -1,6 +1,8 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
+
+# ── Legacy schemas (kept for backward compat) ─────────────────────────────────
 
 class ASRJobRequest(BaseModel):
     job_id: str = Field(..., example="asr_job_001")
@@ -33,3 +35,30 @@ class FEMJobResponse(BaseModel):
     positive_percentage: float
     neutral_percentage: float
     negative_percentage: float
+
+
+# ── New REST schemas ───────────────────────────────────────────────────────────
+
+class ASRMetadata(BaseModel):
+    model_name: str
+    language: str
+    duration: Optional[float] = None
+
+
+class ASRTranscribeResponse(BaseModel):
+    transcript: str
+    metadata: ASRMetadata
+
+
+class FEMFrameResult(BaseModel):
+    frame_index: int
+    dominant_emotion: str
+    scores: Dict[str, float]
+
+
+class FEMAnalyzeResponse(BaseModel):
+    dominant_emotion: str
+    emotion_distribution: Dict[str, float]
+    frame_results: List[FEMFrameResult]
+    confidence_average: float
+    expression_score: float

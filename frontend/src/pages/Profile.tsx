@@ -1,7 +1,12 @@
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import type { ChangeEvent, FormEvent } from "react"
+import { useNavigate } from "react-router-dom"
 
 import Navbar from "../components/Navbar"
+import { getApiBaseUrl } from "../lib/apiBase"
+
+const AUTH_TOKEN_KEY = "vagmiai_auth_token"
+const AUTH_USER_KEY = "vagmiai_auth_user"
 
 const dashboardNavItems = [
   { label: "Latihan", to: "/session/setup" },
@@ -32,13 +37,60 @@ function isValidEmail(value: string) {
 }
 
 function Profile() {
+  const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [form, setForm] = useState<ProfileFormState>(emptyForm)
   const [baselineForm, setBaselineForm] = useState<ProfileFormState>(emptyForm)
   const [cvFile, setCvFile] = useState<File | null>(null)
+  const [cvMeta, setCvMeta] = useState<{ filename: string; url: string } | null>(null)
   const [baselineCvFile, setBaselineCvFile] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    const token = localStorage.getItem(AUTH_TOKEN_KEY)
+    if (!token) {
+      navigate("/signin")
+      return
+    }
+
+    async function fetchProfile() {
+      try {
+        const res = await fetch(`${getApiBaseUrl()}/api/profile`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+        if (!res.ok) {
+          if (res.status === 401) {
+            localStorage.removeItem(AUTH_TOKEN_KEY)
+            navigate("/signin")
+          }
+          return
+        }
+        const data = await res.json()
+        const user = data.user
+        if (user) {
+          const loadedForm = {
+            namaLengkap: user.name || "",
+            email: user.email || "",
+            nomorTelepon: user.phone || "",
+            domisili: user.domicile || "",
+            headline: user.description || "",
+          }
+          setForm(loadedForm)
+          setBaselineForm(loadedForm)
+          if (user.cv && user.cv.filename) {
+            setCvMeta(user.cv)
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load profile", err)
+      }
+    }
+    fetchProfile()
+  }, [navigate])
 
   function handleCvChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -55,9 +107,10 @@ function Profile() {
     fileInputRef.current?.click()
   }
 
-  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setSuccessMessage(null)
+    setError(null)
 
     if (!form.namaLengkap.trim()) {
       setError("Nama lengkap wajib diisi.")
@@ -72,11 +125,60 @@ function Profile() {
       return
     }
 
-    setError(null)
-    setBaselineForm({ ...form })
-    setBaselineCvFile(cvFile)
-    setSuccessMessage("Perubahan profil berhasil disimpan (simulasi)")
-    window.setTimeout(() => setSuccessMessage(null), 5000)
+    const token = localStorage.getItem(AUTH_TOKEN_KEY)
+    if (!token) {
+      setError("Sesi telah berakhir, silakan login kembali.")
+      return
+    }
+
+    setLoading(true)
+    try {
+      const formData = new FormData()
+      formData.append("name", form.namaLengkap)
+      formData.append("email", form.email)
+      formData.append("phone", form.nomorTelepon)
+      formData.append("domicile", form.domisili)
+      formData.append("description", form.headline)
+      
+      if (cvFile) {
+        formData.append("cv", cvFile)
+      }
+
+      const res = await fetch(`${getApiBaseUrl()}/api/profile`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        body: formData
+      })
+      
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.message || "Gagal memperbarui profil.")
+        return
+      }
+
+      setBaselineForm({ ...form })
+      setBaselineCvFile(cvFile)
+      if (data.user?.cv?.filename) {
+        setCvMeta(data.user.cv)
+      }
+      
+      if (data.user) {
+        localStorage.setItem(AUTH_USER_KEY, JSON.stringify({
+          id: data.user._id,
+          name: data.user.name,
+          email: data.user.email
+        }))
+      }
+
+      setSuccessMessage("Perubahan profil berhasil disimpan")
+      window.setTimeout(() => setSuccessMessage(null), 5000)
+    } catch (err) {
+      setError("Terjadi kesalahan jaringan.")
+    } finally {
+      setLoading(false)
+    }
   }
 
   function handleReset() {
@@ -225,7 +327,7 @@ function Profile() {
               onChange={handleCvChange}
             />
             <div className="mt-6 rounded-2xl border border-[#E2E8F0] bg-white/95 p-6 shadow-sm">
-              {!cvFile ? (
+              {!cvFile && !cvMeta ? (
                 <div className="flex flex-col items-center justify-center gap-4 py-6 text-center sm:py-8">
                   <p className="text-sm text-[#475569]">Unggah file PDF atau Word (maks. sesuai browser).</p>
                   <button
@@ -240,12 +342,28 @@ function Profile() {
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="text-xs font-medium uppercase tracking-wide text-[#7C6312]">
-                      File terpilih
+                      {cvFile ? "File terpilih" : "CV Tersimpan"}
                     </p>
-                    <p className="mt-1 truncate text-sm font-medium text-[#0F172A]">{cvFile.name}</p>
-                    <p className="mt-1 text-xs text-[#64748B]">
-                      {(cvFile.size / 1024).toFixed(1)} KB
-                    </p>
+                    {cvFile ? (
+                      <>
+                        <p className="mt-1 truncate text-sm font-medium text-[#0F172A]">{cvFile.name}</p>
+                        <p className="mt-1 text-xs text-[#64748B]">
+                          {(cvFile.size / 1024).toFixed(1)} KB
+                        </p>
+                      </>
+                    ) : cvMeta ? (
+                      <>
+                        <p className="mt-1 truncate text-sm font-medium text-[#0F172A]">{cvMeta.filename}</p>
+                        <a 
+                          href={`${getApiBaseUrl()}${cvMeta.url}`} 
+                          target="_blank" 
+                          rel="noreferrer"
+                          className="mt-1 inline-block text-sm font-medium text-[#c9a227] hover:underline"
+                        >
+                          Lihat File CV
+                        </a>
+                      </>
+                    ) : null}
                   </div>
                   <div className="flex flex-wrap gap-3">
                     <button
@@ -255,13 +373,15 @@ function Profile() {
                     >
                       Ganti File
                     </button>
-                    <button
-                      type="button"
-                      onClick={handleRemoveCv}
-                      className="rounded-full border border-[#FECACA] bg-[#FEF2F2] px-5 py-2.5 text-sm font-medium text-[#991B1B] transition hover:bg-[#FEE2E2]"
-                    >
-                      Hapus
-                    </button>
+                    {cvFile && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveCv}
+                        className="rounded-full border border-[#FECACA] bg-[#FEF2F2] px-5 py-2.5 text-sm font-medium text-[#991B1B] transition hover:bg-[#FEE2E2]"
+                      >
+                        Batal File
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -271,14 +391,16 @@ function Profile() {
           <div className="flex flex-wrap items-center gap-4">
             <button
               type="submit"
-              className="rounded-full bg-[#0F172A] px-6 py-3 text-sm font-medium text-white shadow-sm transition hover:opacity-95"
+              disabled={loading}
+              className="rounded-full bg-[#0F172A] px-6 py-3 text-sm font-medium text-white shadow-sm transition hover:opacity-95 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              Simpan Perubahan
+              {loading ? "Menyimpan..." : "Simpan Perubahan"}
             </button>
             <button
               type="button"
               onClick={handleReset}
-              className="rounded-full border border-[#E2E8F0] bg-white px-6 py-3 text-sm font-medium text-[#334155] transition hover:border-[#CBD5E1] hover:text-[#0F172A]"
+              disabled={loading}
+              className="rounded-full border border-[#E2E8F0] bg-white px-6 py-3 text-sm font-medium text-[#334155] transition hover:border-[#CBD5E1] hover:text-[#0F172A] disabled:opacity-60 disabled:cursor-not-allowed"
             >
               Reset Perubahan
             </button>

@@ -1,7 +1,7 @@
 import os
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 
-load_dotenv()
+load_dotenv(find_dotenv())
 
 APP_NAME = os.getenv("APP_NAME", "VagmiAI AI Service")
 APP_ENV = os.getenv("APP_ENV", "development")
@@ -17,3 +17,4 @@ ASR_LANGUAGE = os.getenv("ASR_LANGUAGE", "id")
 
 FEM_MODEL_NAME = os.getenv("FEM_MODEL_NAME", "dima806/facial_emotions_image_detection")
 FEM_DEVICE = int(os.getenv("FEM_DEVICE", "-1"))
+MAX_FEM_FRAMES = int(os.getenv("MAX_FEM_FRAMES", 10))

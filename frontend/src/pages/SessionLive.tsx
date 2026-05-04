@@ -1,23 +1,30 @@
-import { useEffect, useRef, useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
+import { useEffect, useRef, useState, useCallback } from "react"
+import { Link, useNavigate, useLocation } from "react-router-dom"
 
 import Navbar from "../components/Navbar"
+import { getApiBaseUrl } from "../lib/apiBase"
 
 const dashboardNavItems = [
   { label: "Latihan", to: "/session/setup" },
   { label: "Riwayat", to: "/history" },
 ]
 
-const MOCK_QUESTIONS = [
-  "Ceritakan tentang diri Anda dan pengalaman yang paling relevan untuk posisi ini.",
-  "Mengapa Anda tertarik melamar posisi ini?",
-  "Ceritakan tantangan teknis atau kerja tim yang pernah Anda hadapi dan bagaimana Anda menyelesaikannya.",
-  "Apa kelebihan utama Anda yang menurut Anda paling sesuai untuk peran ini?",
-  "Di area mana Anda masih ingin berkembang?",
-] as const
-
 type RecordingState = "idle" | "recording" | "stopped"
 type SessionPhase = "overview" | "live" | "completed"
+
+type SessionQuestion = {
+  questionId: string
+  questionNumber: number
+  questionText: string
+  category: string
+  difficulty?: string
+}
+
+type SubmittedAnswer = {
+  answerId: string
+  questionNumber: number
+  processingStatus: string
+}
 
 function pickRecorderMimeType(): string | undefined {
   const candidates = [
@@ -35,6 +42,7 @@ function pickRecorderMimeType(): string | undefined {
 
 function SessionLive() {
   const navigate = useNavigate()
+  const location = useLocation()
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
@@ -45,51 +53,58 @@ function SessionLive() {
   const [phase, setPhase] = useState<SessionPhase>("overview")
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [recordingState, setRecordingState] = useState<RecordingState>("idle")
-  const [submittedAnswers, setSubmittedAnswers] = useState<string[]>([])
+  const [submittedAnswers, setSubmittedAnswers] = useState<SubmittedAnswer[]>([])
   const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null)
+  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null)
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [cameraReady, setCameraReady] = useState(false)
   const [recorderError, setRecorderError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
-  const totalQuestions = MOCK_QUESTIONS.length
-  const currentQuestion = MOCK_QUESTIONS[currentQuestionIndex]
-  const progress = ((currentQuestionIndex + 1) / totalQuestions) * 100
+  // State from navigation
+  const sessionId: string = location.state?.sessionId ?? ""
+  const sessionQuestions: SessionQuestion[] = location.state?.questions ?? []
 
+  useEffect(() => {
+    if (sessionQuestions.length === 0 || !sessionId) {
+      navigate("/session/setup")
+    }
+  }, [sessionQuestions, sessionId, navigate])
+
+  const totalQuestions = sessionQuestions.length
+  const currentQuestion = sessionQuestions[currentQuestionIndex]
+  const progress = totalQuestions > 0 ? ((currentQuestionIndex + 1) / totalQuestions) * 100 : 0
+
+  // ── Blob URL tracking ──────────────────────────────────────────────────────
   function trackBlobUrl(url: string) {
     blobUrlsRef.current.push(url)
   }
-
   function revokeBlobUrl(url: string) {
     URL.revokeObjectURL(url)
     blobUrlsRef.current = blobUrlsRef.current.filter((u) => u !== url)
   }
-
   function revokeAllBlobUrls() {
     blobUrlsRef.current.forEach((u) => URL.revokeObjectURL(u))
     blobUrlsRef.current = []
   }
 
-  useEffect(() => {
-    return () => {
-      revokeAllBlobUrls()
-    }
-  }, [])
+  useEffect(() => () => revokeAllBlobUrls(), [])
 
+  // Navigate to results when phase = completed
   useEffect(() => {
     if (phase !== "completed") return
     const t = window.setTimeout(() => {
-      navigate("/results/session-1")
-    }, 1600)
+      navigate(`/results/${sessionId}`)
+    }, 1800)
     return () => window.clearTimeout(t)
-  }, [phase, navigate])
+  }, [phase, navigate, sessionId])
 
+  // ── Camera lifecycle ───────────────────────────────────────────────────────
   useEffect(() => {
-    if (phase !== "live") {
-      return
-    }
+    if (phase !== "live") return
 
     liveMountIdRef.current += 1
-
     let stream: MediaStream | null = null
     let cancelled = false
 
@@ -99,36 +114,28 @@ function SessionLive() {
 
     async function startCamera() {
       if (!navigator.mediaDevices?.getUserMedia) {
-        if (!cancelled) {
-          setCameraError("Peramban Anda tidak mendukung akses kamera.")
-        }
+        if (!cancelled) setCameraError("Peramban Anda tidak mendukung akses kamera.")
         return
       }
-
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
         if (cancelled) {
-          stream.getTracks().forEach((track) => track.stop())
+          stream.getTracks().forEach((t) => t.stop())
           return
         }
-
         mediaStreamRef.current = stream
-
         const el = videoRef.current
         if (el) {
           el.srcObject = stream
           await el.play().catch(() => {})
         }
-
         if (!cancelled) {
           setCameraReady(true)
           setCameraError(null)
         }
       } catch {
         if (!cancelled) {
-          setCameraError(
-            "Kamera atau mikrofon tidak dapat diakses. Pastikan izin sudah diberikan.",
-          )
+          setCameraError("Kamera atau mikrofon tidak dapat diakses. Pastikan izin sudah diberikan.")
           setCameraReady(false)
         }
       }
@@ -140,19 +147,13 @@ function SessionLive() {
       cancelled = true
       liveMountIdRef.current += 1
       const rec = mediaRecorderRef.current
-      if (rec && rec.state !== "inactive") {
-        rec.stop()
-      }
+      if (rec && rec.state !== "inactive") rec.stop()
       mediaRecorderRef.current = null
       recordedChunksRef.current = []
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop())
-      }
+      if (stream) stream.getTracks().forEach((t) => t.stop())
       mediaStreamRef.current = null
       const el = videoRef.current
-      if (el) {
-        el.srcObject = null
-      }
+      if (el) el.srcObject = null
     }
   }, [phase])
 
@@ -165,9 +166,11 @@ function SessionLive() {
     void el.play().catch(() => {})
   }, [phase, recordedVideoUrl, cameraReady])
 
+  // ── Session control ────────────────────────────────────────────────────────
   function handleStartSession() {
     revokeAllBlobUrls()
     setRecordedVideoUrl(null)
+    setRecordedBlob(null)
     setCurrentQuestionIndex(0)
     setRecordingState("idle")
     setSubmittedAnswers([])
@@ -176,37 +179,34 @@ function SessionLive() {
     setPhase("live")
   }
 
+  // ── Recording control ─────────────────────────────────────────────────────
   function handleStartRecording() {
     const recordingMountId = liveMountIdRef.current
     setRecorderError(null)
+    setSubmitError(null)
     const stream = mediaStreamRef.current
     if (!stream || typeof MediaRecorder === "undefined") {
       setRecorderError("Perekaman tidak didukung di peramban ini.")
       return
     }
-
     if (recordedVideoUrl) {
       revokeBlobUrl(recordedVideoUrl)
       setRecordedVideoUrl(null)
+      setRecordedBlob(null)
     }
-
     recordedChunksRef.current = []
 
     let recorder: MediaRecorder
     try {
       const mimeType = pickRecorderMimeType()
-      recorder = mimeType
-        ? new MediaRecorder(stream, { mimeType })
-        : new MediaRecorder(stream)
+      recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
     } catch {
       setRecorderError("Tidak dapat memulai perekaman.")
       return
     }
 
     recorder.ondataavailable = (e: BlobEvent) => {
-      if (e.data.size > 0) {
-        recordedChunksRef.current.push(e.data)
-      }
+      if (e.data.size > 0) recordedChunksRef.current.push(e.data)
     }
 
     recorder.onstop = () => {
@@ -214,7 +214,6 @@ function SessionLive() {
         recordedChunksRef.current = []
         return
       }
-
       const chunks = recordedChunksRef.current
       const blobType = recorder.mimeType || "video/webm"
       const blob =
@@ -230,6 +229,7 @@ function SessionLive() {
       const url = URL.createObjectURL(blob)
       trackBlobUrl(url)
       setRecordedVideoUrl(url)
+      setRecordedBlob(blob)
       setRecordingState("stopped")
       mediaRecorderRef.current = null
     }
@@ -254,44 +254,92 @@ function SessionLive() {
   function handleStopRecording() {
     const rec = mediaRecorderRef.current
     if (!rec || rec.state === "inactive") return
-    if (rec.state === "recording") {
-      rec.stop()
-    }
+    if (rec.state === "recording") rec.stop()
   }
 
   function handleRetryRecording() {
     const rec = mediaRecorderRef.current
-    if (rec && rec.state !== "inactive") {
-      rec.stop()
-    }
+    if (rec && rec.state !== "inactive") rec.stop()
     mediaRecorderRef.current = null
     recordedChunksRef.current = []
-
     if (recordedVideoUrl) {
       revokeBlobUrl(recordedVideoUrl)
       setRecordedVideoUrl(null)
+      setRecordedBlob(null)
     }
-
     setRecordingState("idle")
     setRecorderError(null)
+    setSubmitError(null)
   }
 
-  function handleSubmitAnswer() {
-    if (!recordedVideoUrl) return
+  // ── Answer submission (async) ──────────────────────────────────────────────
+  const handleSubmitAnswer = useCallback(async () => {
+    if (!recordedBlob || !currentQuestion || isSubmitting) return
 
-    setSubmittedAnswers((prev) => [...prev, recordedVideoUrl])
-    setRecordedVideoUrl(null)
-    setRecordingState("idle")
-    recordedChunksRef.current = []
-    mediaRecorderRef.current = null
-    setRecorderError(null)
+    setIsSubmitting(true)
+    setSubmitError(null)
 
-    if (currentQuestionIndex >= totalQuestions - 1) {
-      setPhase("completed")
-      return
+    try {
+      const token = localStorage.getItem("vagmiai_auth_token")
+
+      const formData = new FormData()
+      formData.append("sessionId", sessionId)
+      formData.append("questionId", currentQuestion.questionId)
+      formData.append("questionNumber", String(currentQuestion.questionNumber))
+      formData.append("questionText", currentQuestion.questionText)
+      formData.append("video", recordedBlob, `answer-q${currentQuestion.questionNumber}.webm`)
+
+      const res = await fetch(`${getApiBaseUrl()}/api/answers/submit`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      })
+
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        throw new Error(data.message || "Gagal mengunggah jawaban.")
+      }
+
+      // Record the queued answer locally
+      setSubmittedAnswers((prev) => [
+        ...prev,
+        {
+          answerId: data.answerId,
+          questionNumber: currentQuestion.questionNumber,
+          processingStatus: data.processingStatus,
+        },
+      ])
+
+      // Clean up recording state
+      if (recordedVideoUrl) revokeBlobUrl(recordedVideoUrl)
+      setRecordedVideoUrl(null)
+      setRecordedBlob(null)
+      setRecordingState("idle")
+      recordedChunksRef.current = []
+      mediaRecorderRef.current = null
+      setRecorderError(null)
+
+      // Advance or complete
+      if (currentQuestionIndex >= totalQuestions - 1) {
+        setPhase("completed")
+      } else {
+        setCurrentQuestionIndex((i) => i + 1)
+      }
+    } catch (err: any) {
+      setSubmitError(err.message || "Terjadi kesalahan. Coba lagi.")
+    } finally {
+      setIsSubmitting(false)
     }
-    setCurrentQuestionIndex((i) => i + 1)
-  }
+  }, [
+    recordedBlob,
+    currentQuestion,
+    isSubmitting,
+    sessionId,
+    currentQuestionIndex,
+    totalQuestions,
+    recordedVideoUrl,
+  ])
 
   const recorderSupported = typeof MediaRecorder !== "undefined"
   const canStartRecording =
@@ -301,8 +349,8 @@ function SessionLive() {
     recorderSupported &&
     !!mediaStreamRef.current
   const canStopRecording = recordingState === "recording"
-  const canRetryRecording = recordedVideoUrl !== null
-  const canSubmitAnswer = recordedVideoUrl !== null
+  const canRetryRecording = recordedVideoUrl !== null && !isSubmitting
+  const canSubmitAnswer = recordedBlob !== null && !isSubmitting
 
   const showLivePreview = !recordedVideoUrl
 
@@ -318,6 +366,7 @@ function SessionLive() {
       <Navbar navItems={dashboardNavItems} />
 
       <main className="relative z-10 mx-auto max-w-7xl px-6 py-10 lg:px-10">
+        {/* ── Overview phase ───────────────────────────────────────────────── */}
         {phase === "overview" ? (
           <>
             <section className="rounded-[32px] border border-[#E2E8F0] bg-white/90 p-8 shadow-sm backdrop-blur lg:p-10">
@@ -328,9 +377,9 @@ function SessionLive() {
                 Tinjau pertanyaan sebelum memulai
               </h1>
               <p className="mt-4 max-w-2xl text-base leading-8 text-[#475569]">
-                Setelah memulai, Anda akan menjawab satu per satu secara berurutan. Siapkan diri Anda
-                di area yang tenang dan pastikan kamera serta mikrofon siap digunakan saat integrasi
-                aktif nanti.
+                Setelah memulai, Anda akan menjawab satu per satu secara berurutan. Rekaman video
+                Anda akan diunggah secara otomatis dan diproses di latar belakang. Anda dapat
+                langsung lanjut ke pertanyaan berikutnya tanpa menunggu hasil evaluasi.
               </p>
             </section>
 
@@ -339,16 +388,16 @@ function SessionLive() {
                 Daftar pertanyaan ({totalQuestions})
               </h2>
               <ol className="space-y-3">
-                {MOCK_QUESTIONS.map((q, i) => (
+                {sessionQuestions.map((q, i) => (
                   <li
-                    key={i}
+                    key={q.questionId}
                     className="rounded-[24px] border border-[#E2E8F0] bg-white/90 p-5 shadow-sm backdrop-blur sm:p-6"
                   >
                     <div className="flex gap-4">
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#0F172A]/10 text-sm font-semibold text-[#0F172A]">
                         {i + 1}
                       </span>
-                      <p className="text-base leading-7 text-[#334155]">{q}</p>
+                      <p className="text-base leading-7 text-[#334155]">{q.questionText}</p>
                     </div>
                   </li>
                 ))}
@@ -373,6 +422,7 @@ function SessionLive() {
           </>
         ) : null}
 
+        {/* ── Live phase ───────────────────────────────────────────────────── */}
         {phase === "live" ? (
           <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:items-start">
             <section className="rounded-[32px] border border-[#E2E8F0] bg-white/90 p-8 shadow-sm backdrop-blur lg:p-10">
@@ -389,7 +439,7 @@ function SessionLive() {
               </div>
 
               <h1 className="mt-6 text-xl font-semibold leading-8 tracking-tight text-[#0F172A] sm:text-2xl sm:leading-9">
-                {currentQuestion}
+                {currentQuestion?.questionText}
               </h1>
 
               <p className="mt-4 text-sm leading-6 text-[#64748B]">
@@ -402,8 +452,24 @@ function SessionLive() {
                 </p>
               ) : null}
 
+              {submitError ? (
+                <p className="mt-4 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 text-sm text-[#991B1B]" role="alert">
+                  {submitError}
+                </p>
+              ) : null}
+
+              {/* Processing info */}
+              {submittedAnswers.length > 0 && (
+                <div className="mt-6 rounded-2xl border border-[#E8D9A0]/60 bg-[#FAF6E8]/40 px-4 py-3">
+                  <p className="text-xs font-medium text-[#7C6312]">
+                    {submittedAnswers.length} jawaban sebelumnya sedang diproses di latar belakang…
+                  </p>
+                </div>
+              )}
+
               <div className="mt-8 flex flex-wrap gap-3">
                 <button
+                  id="btn-start-recording"
                   type="button"
                   disabled={!canStartRecording}
                   onClick={handleStartRecording}
@@ -412,6 +478,7 @@ function SessionLive() {
                   Start Recording
                 </button>
                 <button
+                  id="btn-stop-recording"
                   type="button"
                   disabled={!canStopRecording}
                   onClick={handleStopRecording}
@@ -420,6 +487,7 @@ function SessionLive() {
                   Stop Recording
                 </button>
                 <button
+                  id="btn-retry-recording"
                   type="button"
                   disabled={!canRetryRecording}
                   onClick={handleRetryRecording}
@@ -428,12 +496,20 @@ function SessionLive() {
                   Retry Recording
                 </button>
                 <button
+                  id="btn-submit-answer"
                   type="button"
                   disabled={!canSubmitAnswer}
                   onClick={handleSubmitAnswer}
                   className="rounded-full bg-[#C9A227] px-5 py-2.5 text-sm font-medium text-[#0F172A] shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  Submit Answer
+                  {isSubmitting ? (
+                    <span className="flex items-center gap-2">
+                      <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#0F172A]/30 border-t-[#0F172A]" />
+                      Mengunggah…
+                    </span>
+                  ) : (
+                    "Submit Answer"
+                  )}
                 </button>
               </div>
             </section>
@@ -473,20 +549,8 @@ function SessionLive() {
                   {cameraError ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center">
                       <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-dashed border-[#CBD5E1] bg-white/90 text-[#94A3B8]">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                          className="h-8 w-8"
-                          aria-hidden
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z"
-                          />
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-8 w-8" aria-hidden>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
                         </svg>
                       </div>
                       <p className="max-w-[16rem] text-sm leading-6 text-[#475569]">{cameraError}</p>
@@ -500,17 +564,20 @@ function SessionLive() {
                   Status rekaman
                 </p>
                 <p className="mt-1 text-sm font-medium text-[#0F172A]">
-                  {recordedVideoUrl
-                    ? "Tinjau rekaman — putar ulang jika perlu"
-                    : recordingState === "recording"
-                      ? "Sedang merekam…"
-                      : "Belum merekam"}
+                  {isSubmitting
+                    ? "Mengunggah jawaban…"
+                    : recordedVideoUrl
+                      ? "Tinjau rekaman — putar ulang jika perlu"
+                      : recordingState === "recording"
+                        ? "Sedang merekam…"
+                        : "Belum merekam"}
                 </p>
               </div>
             </aside>
           </div>
         ) : null}
 
+        {/* ── Completed phase ──────────────────────────────────────────────── */}
         {phase === "completed" ? (
           <section className="rounded-[32px] border border-[#E2E8F0] bg-white/90 px-8 py-16 text-center shadow-sm backdrop-blur lg:px-12 lg:py-20">
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-[#7C6312]">
@@ -520,9 +587,12 @@ function SessionLive() {
               Terima kasih telah menyelesaikan simulasi
             </h1>
             <p className="mx-auto mt-4 max-w-md text-base leading-7 text-[#475569]">
-              {submittedAnswers.length} jawaban simulasi telah dikirim. Mengalihkan Anda ke ringkasan
-              hasil…
+              {submittedAnswers.length} jawaban telah diunggah dan sedang diproses di latar
+              belakang. Mengalihkan Anda ke halaman hasil…
             </p>
+            <div className="mt-6 flex justify-center">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#E2E8F0] border-t-[#C9A227]" />
+            </div>
           </section>
         ) : null}
       </main>

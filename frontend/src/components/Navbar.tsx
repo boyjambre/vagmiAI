@@ -1,4 +1,4 @@
-import { Link, NavLink } from "react-router-dom"
+import { Link, NavLink, useNavigate } from "react-router-dom"
 
 export type NavbarNavItem = {
   label: string
@@ -18,6 +18,15 @@ function Navbar({
   showAuthActions = true,
   className = "",
 }: NavbarProps) {
+  const navigate = useNavigate()
+
+  function handleSignOut(e: React.MouseEvent) {
+    e.preventDefault()
+    localStorage.removeItem("vagmiai_auth_token")
+    localStorage.removeItem("vagmiai_auth_user")
+    navigate("/signin")
+  }
+
   return (
     <header
       className={["sticky top-4 z-50 px-4", className].filter(Boolean).join(" ")}
@@ -71,12 +80,12 @@ function Navbar({
             >
               Profil
             </Link>
-            <Link
-              to="/signin"
+            <button
+              onClick={handleSignOut}
               className="rounded-full bg-[#0F172A] px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-95 sm:px-4"
             >
               Keluar
-            </Link>
+            </button>
           </div>
         ) : null}
       </div>

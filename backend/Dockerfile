@@ -1,6 +1,7 @@
 FROM node:20-alpine
 
-RUN apk add --no-cache python3 make g++
+# ffmpeg for audio extraction from answer videos
+RUN apk add --no-cache python3 make g++ ffmpeg
 
 WORKDIR /app
 

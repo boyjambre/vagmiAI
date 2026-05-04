@@ -1,120 +1,373 @@
-import { useState } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { Link, useParams } from "react-router-dom"
 
 import Navbar from "../components/Navbar"
+import { getApiBaseUrl } from "../lib/apiBase"
 
 const dashboardNavItems = [
   { label: "Latihan", to: "/session/setup" },
   { label: "Riwayat", to: "/history" },
 ]
 
-const sessionEvaluations = {
-  session1:
-    "Secara keseluruhan, jawaban sudah cukup relevan dan terstruktur.\n" +
-    "Kekuatan utama terlihat pada kemampuan menjelaskan pengalaman dan motivasi.\n" +
-    "Area yang masih dapat ditingkatkan adalah penyampaian contoh yang lebih konkret\n" +
-    "dan konsistensi kepercayaan diri saat menjawab.",
-  session2:
-    "Motivasi dan alur jawaban cukup baik, namun masih bisa lebih spesifik.\n" +
-    "Perkuat jawaban dengan metrik atau contoh singkat yang terhubung dengan kebutuhan peran.",
-  session3:
-    "Penyampaian cukup stabil dan key points sudah tersampaikan dengan baik.\n" +
-    "Pertahankan struktur jawaban dan tambahkan satu contoh dampak untuk memperkuat kesan.",
-} as const
+// Statuses that mean evaluation is still running
+const PENDING_STATUSES = new Set([
+  "queued",
+  "processing",
+  "audio_extracted",
+  "asr_completed",
+  "fem_completed",
+  "evaluating",
+])
 
-type SessionResultMeta = {
-  title: string
-  score: number
-  llmEvaluation: string
-}
+type ProcessingStatus =
+  | "queued"
+  | "processing"
+  | "audio_extracted"
+  | "asr_completed"
+  | "fem_completed"
+  | "evaluating"
+  | "completed"
+  | "failed"
 
-const sessionResultById: Record<string, SessionResultMeta> = {
-  "session-1": {
-    title: "Frontend Developer Interview",
-    score: 84,
-    llmEvaluation: sessionEvaluations.session1,
-  },
-  "session-2": {
-    title: "Product Analyst Interview",
-    score: 80,
-    llmEvaluation: sessionEvaluations.session2,
-  },
-  "session-3": {
-    title: "Backend Engineer Interview",
-    score: 88,
-    llmEvaluation: sessionEvaluations.session3,
-  },
-}
-
-type QuestionResult = {
-  question: string
-  answer: string
-  femScore: number
-  llmScore: number
+type AnswerEvaluation = {
+  strengths: string[]
+  weaknesses: string[]
   evaluation: string
-  overallScore: number
+  improvementSuggestions: string[]
+}
+
+type SessionAnswer = {
+  _id: string
+  questionNumber: number
+  questionText: string
+  transcript: string
+  asrMetadata: { modelName: string; language: string; duration: number | null } | null
+  femResult: {
+    dominantEmotion: string
+    emotionDistribution: Record<string, number>
+    confidenceAverage: number
+    expressionScore: number
+  } | null
+  femSummary: string
+  answerEvaluation: AnswerEvaluation | null
+  answerScore: number | null
+  communicationScore: number | null
+  expressionScore: number | null
+  overallQuestionScore: number | null
   optimalAnswer: string
+  processingStatus: ProcessingStatus
+  processingError: string
 }
 
-const defaultSessionMeta: SessionResultMeta = {
-  title: "Sesi latihan",
-  score: 84,
-  llmEvaluation: sessionEvaluations.session1,
+type SessionData = {
+  _id: string
+  title: string
+  jobRole: string
+  companyName: string
+  totalQuestions: number
+  totalScore: number | null
+  overallEvaluation: string
+  status: string
+  generatedQuestions: Array<{
+    questionId: string
+    questionNumber: number
+    questionText: string
+    category: string
+  }>
 }
 
-const questions: QuestionResult[] = [
-  {
-    question:
-      "Ceritakan tentang diri Anda dan pengalaman yang paling relevan untuk posisi ini.",
-    answer:
-      "Saya adalah seorang lulusan Informatika yang memiliki minat pada pengembangan web\n" +
-      "dan sistem berbasis AI. Saya telah mengerjakan beberapa proyek full-stack dan juga\n" +
-      "mengembangkan aplikasi yang memanfaatkan model AI untuk membantu pengguna.",
-    femScore: 82,
-    llmScore: 86,
-    evaluation:
-      "Jawaban cukup relevan dan memberikan gambaran umum yang baik tentang latar belakang.\n" +
-      "Akan lebih kuat jika ditambahkan contoh proyek yang lebih spesifik dan hasil yang dicapai.",
-    overallScore: 84,
-    optimalAnswer:
-      "Saya adalah lulusan Informatika dengan fokus pada pengembangan aplikasi web dan integrasi AI.\n" +
-      "Dalam beberapa proyek terakhir, saya membangun sistem full-stack dan fitur berbasis AI\n" +
-      "yang dirancang untuk menyelesaikan masalah nyata pengguna. Pengalaman tersebut melatih saya\n" +
-      "untuk berpikir terstruktur, berkolaborasi, dan menghasilkan solusi yang dapat diimplementasikan.",
-  },
-  {
-    question: "Mengapa Anda tertarik melamar posisi ini?",
-    answer:
-      "Saya tertarik karena posisi ini sesuai dengan minat dan pengalaman saya, terutama\n" +
-      "dalam pengembangan sistem yang berdampak dan dapat digunakan secara nyata.",
-    femScore: 78,
-    llmScore: 83,
-    evaluation:
-      "Jawaban sudah menjelaskan motivasi dasar, tetapi masih terdengar umum.\n" +
-      "Sebaiknya hubungkan alasan ketertarikan dengan perusahaan atau tanggung jawab posisi secara spesifik.",
-    overallScore: 80,
-    optimalAnswer:
-      "Saya tertarik melamar posisi ini karena tanggung jawabnya sangat selaras dengan pengalaman saya\n" +
-      "dalam membangun aplikasi yang fokus pada kebutuhan pengguna. Selain itu, saya melihat bahwa peran ini\n" +
-      "memberi peluang untuk berkembang lebih jauh dalam area yang memang ingin saya tekuni secara profesional.",
-  },
-]
+type ResultData = {
+  session: SessionData
+  answers: SessionAnswer[]
+}
+
+function statusLabel(status: ProcessingStatus): string {
+  switch (status) {
+    case "queued": return "Menunggu antrian…"
+    case "processing": return "Memproses…"
+    case "audio_extracted": return "Audio diekstrak, mentranskripsi…"
+    case "asr_completed": return "Transkripsi selesai, analisis ekspresi…"
+    case "fem_completed": return "Analisis ekspresi selesai, mengevaluasi…"
+    case "evaluating": return "Mengevaluasi jawaban…"
+    case "completed": return "Selesai"
+    case "failed": return "Gagal diproses"
+    default: return status
+  }
+}
+
+function ScorePill({
+  label,
+  value,
+  accent = false,
+}: {
+  label: string
+  value: number | null
+  accent?: boolean
+}) {
+  return (
+    <div
+      className={`rounded-2xl border px-4 py-3 text-center shadow-sm ${
+        accent
+          ? "border-[#E8D9A0]/60 bg-[#FAF6E8]/60"
+          : "border-[#E2E8F0] bg-[#F8FAFC]/90"
+      }`}
+    >
+      <p className={`text-xs font-medium uppercase tracking-wide ${accent ? "text-[#7C6312]" : "text-[#64748B]"}`}>
+        {label}
+      </p>
+      <p className="mt-1 text-2xl font-semibold tabular-nums text-[#0F172A]">
+        {value !== null && value !== undefined ? value : "—"}
+      </p>
+    </div>
+  )
+}
+
+function ProcessingCard({ answer }: { answer: SessionAnswer }) {
+  return (
+    <div className="rounded-[28px] border border-[#E2E8F0] bg-white/90 p-8 shadow-sm backdrop-blur lg:p-10">
+      <div className="flex flex-wrap items-baseline gap-3">
+        <span className="inline-flex h-9 min-w-[2.25rem] items-center justify-center rounded-full bg-[#0F172A] px-3 text-sm font-semibold text-white">
+          {answer.questionNumber}
+        </span>
+        <h3 className="text-lg font-semibold leading-snug text-[#0F172A] sm:text-xl">
+          {answer.questionText}
+        </h3>
+      </div>
+
+      <div className="mt-6 flex items-center gap-3 rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-3">
+        {answer.processingStatus !== "failed" ? (
+          <span className="inline-block h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-[#E2E8F0] border-t-[#C9A227]" />
+        ) : (
+          <span className="inline-block h-4 w-4 shrink-0 rounded-full bg-[#EF4444]" />
+        )}
+        <p className="text-sm font-medium text-[#334155]">
+          {statusLabel(answer.processingStatus)}
+        </p>
+      </div>
+
+      {answer.processingError ? (
+        <p className="mt-4 text-xs text-[#DC2626]">{answer.processingError}</p>
+      ) : null}
+    </div>
+  )
+}
+
+function CompletedCard({ answer }: { answer: SessionAnswer }) {
+  const [showOptimal, setShowOptimal] = useState(false)
+
+  return (
+    <article className="rounded-[28px] border border-[#E2E8F0] bg-white/90 p-8 shadow-sm backdrop-blur lg:p-10">
+      <div className="flex flex-wrap items-baseline gap-3">
+        <span className="inline-flex h-9 min-w-[2.25rem] items-center justify-center rounded-full bg-[#0F172A] px-3 text-sm font-semibold text-white">
+          {answer.questionNumber}
+        </span>
+        <h3 className="text-lg font-semibold leading-snug text-[#0F172A] sm:text-xl">
+          {answer.questionText}
+        </h3>
+      </div>
+
+      {/* Scores */}
+      <div className="mt-6 grid gap-4 sm:grid-cols-4">
+        <ScorePill label="Skor jawaban" value={answer.answerScore} />
+        <ScorePill label="Komunikasi" value={answer.communicationScore} />
+        <ScorePill label="Ekspresi" value={answer.expressionScore} />
+        <ScorePill label="Skor overall" value={answer.overallQuestionScore} accent />
+      </div>
+
+      {/* Transcript */}
+      {answer.transcript && (
+        <div className="mt-8">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#64748B]">
+            Transkrip Jawaban
+          </p>
+          <p className="mt-2 whitespace-pre-line text-sm leading-7 text-[#334155]">
+            {answer.transcript}
+          </p>
+          {answer.asrMetadata?.duration && (
+            <p className="mt-1 text-xs text-[#94A3B8]">
+              Durasi: {Math.round(answer.asrMetadata.duration)}s · Bahasa: {answer.asrMetadata.language}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* FEM */}
+      {answer.femResult && (
+        <div className="mt-6 rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#64748B]">
+            Analisis Ekspresi Wajah
+          </p>
+          <p className="mt-2 text-sm text-[#334155]">
+            Ekspresi dominan:{" "}
+            <span className="font-medium capitalize">{answer.femResult.dominantEmotion}</span>
+            {" · "}Confidence rata-rata:{" "}
+            <span className="font-medium">{(answer.femResult.confidenceAverage * 100).toFixed(1)}%</span>
+          </p>
+          {answer.femSummary && (
+            <p className="mt-1 text-xs text-[#64748B]">{answer.femSummary}</p>
+          )}
+        </div>
+      )}
+
+      {/* Evaluation */}
+      {answer.answerEvaluation && (
+        <>
+          <div className="mt-8">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#64748B]">
+              Evaluasi Jawaban
+            </p>
+            <p className="mt-2 whitespace-pre-line text-sm leading-7 text-[#334155]">
+              {answer.answerEvaluation.evaluation}
+            </p>
+          </div>
+
+          {answer.answerEvaluation.strengths?.length > 0 && (
+            <div className="mt-6">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#16A34A]">
+                Kekuatan
+              </p>
+              <ul className="mt-2 list-inside list-disc space-y-1">
+                {answer.answerEvaluation.strengths.map((s, i) => (
+                  <li key={i} className="text-sm text-[#334155]">{s}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {answer.answerEvaluation.weaknesses?.length > 0 && (
+            <div className="mt-6">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#DC2626]">
+                Area Peningkatan
+              </p>
+              <ul className="mt-2 list-inside list-disc space-y-1">
+                {answer.answerEvaluation.weaknesses.map((w, i) => (
+                  <li key={i} className="text-sm text-[#334155]">{w}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {answer.answerEvaluation.improvementSuggestions?.length > 0 && (
+            <div className="mt-6">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#7C6312]">
+                Saran Peningkatan
+              </p>
+              <ul className="mt-2 list-inside list-disc space-y-1">
+                {answer.answerEvaluation.improvementSuggestions.map((s, i) => (
+                  <li key={i} className="text-sm text-[#334155]">{s}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Optimal answer */}
+      {answer.optimalAnswer && (
+        <div className="mt-8">
+          <button
+            type="button"
+            onClick={() => setShowOptimal((v) => !v)}
+            className="rounded-full bg-[#0F172A] px-6 py-3 text-sm font-medium text-white shadow-sm transition hover:opacity-95"
+          >
+            {showOptimal ? "Sembunyikan Jawaban Optimal" : "Lihat Jawaban Optimal"}
+          </button>
+          {showOptimal && (
+            <div className="mt-6 rounded-2xl border border-[#C9A227]/35 bg-[#FFFCF0] p-6 shadow-sm">
+              <p className="text-sm font-semibold text-[#7C6312]">JAWABAN OPTIMAL</p>
+              <p className="mt-3 whitespace-pre-line text-sm leading-7 text-[#334155]">
+                {answer.optimalAnswer}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </article>
+  )
+}
 
 function SessionResults() {
   const { sessionId } = useParams<{ sessionId: string }>()
-  const sessionMeta =
-    sessionId && sessionResultById[sessionId] ? sessionResultById[sessionId] : defaultSessionMeta
+  const [data, setData] = useState<ResultData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const [optimalOpen, setOptimalOpen] = useState<Record<number, boolean>>({})
+  const fetchResults = useCallback(async () => {
+    if (!sessionId) return
+    try {
+      const token = localStorage.getItem("vagmiai_auth_token")
+      const res = await fetch(`${getApiBaseUrl()}/api/sessions/${sessionId}/results`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.message || "Gagal memuat hasil.")
+      setData(json.data)
+      setError(null)
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [sessionId])
 
-  function toggleOptimal(index: number) {
-    setOptimalOpen((prev) => ({ ...prev, [index]: !prev[index] }))
-  }
+  useEffect(() => {
+    void fetchResults()
+  }, [fetchResults])
 
-  const avgFem =
-    questions.reduce((sum, q) => sum + q.femScore, 0) / questions.length
-  const avgLlm =
-    questions.reduce((sum, q) => sum + q.llmScore, 0) / questions.length
+  // Poll while any answer is still in progress
+  useEffect(() => {
+    if (!data) return
+
+    const hasInProgress = data.answers.some((a) => PENDING_STATUSES.has(a.processingStatus))
+
+    if (hasInProgress) {
+      if (!pollingRef.current) {
+        pollingRef.current = setInterval(() => {
+          void fetchResults()
+        }, 5000)
+      }
+    } else {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
+        pollingRef.current = null
+      }
+    }
+
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
+        pollingRef.current = null
+      }
+    }
+  }, [data, fetchResults])
+
+  // Build lookup: questionNumber → answer
+  const answerMap = new Map<number, SessionAnswer>(
+    (data?.answers ?? []).map((a) => [a.questionNumber, a])
+  )
+
+  const session = data?.session
+
+  const allComplete = data
+    ? data.answers.length > 0 && data.answers.every((a) => !PENDING_STATUSES.has(a.processingStatus))
+    : false
+
+  const completedAnswers = data?.answers.filter((a) => a.processingStatus === "completed") ?? []
+  const avgExpression =
+    completedAnswers.length > 0
+      ? Math.round(
+          completedAnswers.reduce((s, a) => s + (a.expressionScore ?? 0), 0) /
+            completedAnswers.length
+        )
+      : null
+  const avgAnswer =
+    completedAnswers.length > 0
+      ? Math.round(
+          completedAnswers.reduce((s, a) => s + (a.answerScore ?? 0), 0) /
+            completedAnswers.length
+        )
+      : null
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#111827]">
@@ -131,6 +384,12 @@ function SessionResults() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-[#64748B]">
             Evaluasi menggabungkan kualitas jawaban lisan dan analisis ekspresi wajah.
+            {!allComplete && data && (
+              <span className="ml-2 inline-flex items-center gap-1.5 rounded-full border border-[#E8D9A0] bg-[#FAF6E8] px-2.5 py-0.5 text-xs font-medium text-[#7C6312]">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-[#C9A227]" />
+                Sedang memproses…
+              </span>
+            )}
           </p>
           <div className="flex flex-wrap gap-3">
             <Link
@@ -142,160 +401,141 @@ function SessionResults() {
           </div>
         </div>
 
-        <section className="mt-8 rounded-[32px] border border-[#E2E8F0] bg-white/90 p-8 shadow-sm backdrop-blur lg:p-10">
-          <p className="text-sm font-medium uppercase tracking-[0.2em] text-[#7C6312]">
-            Hasil Sesi
-          </p>
-          <h1 className="mt-4 text-3xl font-semibold tracking-tight text-[#0F172A] sm:text-4xl">
-            Ringkasan evaluasi wawancara
-          </h1>
-          {sessionId && sessionResultById[sessionId] ? (
-            <p className="mt-3 text-lg font-medium text-[#0F172A]">
-              {sessionResultById[sessionId].title}
-            </p>
-          ) : null}
-          <p className="mt-4 max-w-3xl text-base leading-8 text-[#475569]">
-            Hasil ini memadukan penilaian kualitas jawaban Anda dan sinyal ekspresi wajah selama
-            sesi, lalu dirangkum dalam skor keseluruhan dan umpan balik dari model bahasa.
-          </p>
-
-          <div className="mt-10 flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
-            <div className="flex flex-col items-start">
-              <p className="text-xs font-medium uppercase tracking-wider text-[#64748B]">
-                Skor sesi
-              </p>
-              <div className="mt-3 flex items-baseline gap-2">
-                <span className="text-5xl font-semibold tracking-tight text-[#0F172A] sm:text-6xl">
-                  {sessionMeta.score}
-                </span>
-                <span className="text-lg font-medium text-[#64748B]">/100</span>
-              </div>
-              <p className="mt-2 text-sm text-[#7C6312]">
-                Gabungan skor jawaban dan ekspresi
-              </p>
-            </div>
-
-            <div className="grid w-full max-w-xl grid-cols-2 gap-4 sm:max-w-none sm:grid-cols-3 lg:w-auto">
-              <div className="rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC]/80 px-4 py-3 text-center shadow-sm">
-                <p className="text-xs font-medium text-[#64748B]">Pertanyaan</p>
-                <p className="mt-1 text-2xl font-semibold text-[#0F172A]">{questions.length}</p>
-              </div>
-              <div className="rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC]/80 px-4 py-3 text-center shadow-sm">
-                <p className="text-xs font-medium text-[#64748B]">Rata-rata ekspresi</p>
-                <p className="mt-1 text-2xl font-semibold text-[#0F172A]">
-                  {Math.round(avgFem)}
-                </p>
-              </div>
-              <div className="col-span-2 rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC]/80 px-4 py-3 text-center shadow-sm sm:col-span-1">
-                <p className="text-xs font-medium text-[#64748B]">Rata-rata jawaban</p>
-                <p className="mt-1 text-2xl font-semibold text-[#0F172A]">
-                  {Math.round(avgLlm)}
-                </p>
-              </div>
-            </div>
+        {/* Loading */}
+        {loading && !data && (
+          <div className="mt-16 flex flex-col items-center gap-4">
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-[#E2E8F0] border-t-[#C9A227]" />
+            <p className="text-sm text-[#64748B]">Memuat hasil sesi…</p>
           </div>
+        )}
 
-          <div className="mt-10 rounded-2xl border border-[#E8D9A0]/60 bg-[#FAF6E8]/40 p-6">
-            <p className="text-sm font-semibold text-[#7C6312]">Evaluasi Overall</p>
-            <p className="mt-3 whitespace-pre-line text-sm leading-7 text-[#334155]">
-              {sessionMeta.llmEvaluation}
-            </p>
+        {/* Error */}
+        {error && (
+          <div className="mt-8 rounded-2xl border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 text-sm text-[#991B1B]">
+            {error}
           </div>
-        </section>
+        )}
 
-        <section className="mt-10 space-y-8">
-          <div className="px-1">
+        {/* Summary section */}
+        {session && (
+          <section className="mt-8 rounded-[32px] border border-[#E2E8F0] bg-white/90 p-8 shadow-sm backdrop-blur lg:p-10">
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-[#7C6312]">
-              Detail per pertanyaan
+              Hasil Sesi
             </p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-[#0F172A]">
-              Hasil tiap pertanyaan
-            </h2>
-          </div>
+            <h1 className="mt-4 text-3xl font-semibold tracking-tight text-[#0F172A] sm:text-4xl">
+              Ringkasan evaluasi wawancara
+            </h1>
+            {session.title && (
+              <p className="mt-3 text-lg font-medium text-[#0F172A]">{session.title}</p>
+            )}
+            {(session.jobRole || session.companyName) && (
+              <p className="mt-1 text-sm text-[#64748B]">
+                {session.jobRole}
+                {session.jobRole && session.companyName ? " · " : ""}
+                {session.companyName}
+              </p>
+            )}
+            <p className="mt-4 max-w-3xl text-base leading-8 text-[#475569]">
+              Hasil ini memadukan penilaian kualitas jawaban Anda dan sinyal ekspresi wajah selama
+              sesi, lalu dirangkum dalam skor keseluruhan dan umpan balik dari model bahasa.
+            </p>
 
-          {questions.map((item, index) => {
-            const showOptimal = optimalOpen[index] === true
-            return (
-              <article
-                key={index}
-                className="rounded-[28px] border border-[#E2E8F0] bg-white/90 p-8 shadow-sm backdrop-blur lg:p-10"
-              >
-                <div className="flex flex-wrap items-baseline gap-3">
-                  <span className="inline-flex h-9 min-w-[2.25rem] items-center justify-center rounded-full bg-[#0F172A] px-3 text-sm font-semibold text-white">
-                    {index + 1}
+            <div className="mt-10 flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex flex-col items-start">
+                <p className="text-xs font-medium uppercase tracking-wider text-[#64748B]">
+                  Skor sesi
+                </p>
+                <div className="mt-3 flex items-baseline gap-2">
+                  <span className="text-5xl font-semibold tracking-tight text-[#0F172A] sm:text-6xl">
+                    {session.totalScore !== null && session.totalScore !== undefined
+                      ? session.totalScore
+                      : allComplete
+                        ? "—"
+                        : "…"}
                   </span>
-                  <h3 className="text-lg font-semibold leading-snug text-[#0F172A] sm:text-xl">
-                    {item.question}
-                  </h3>
+                  <span className="text-lg font-medium text-[#64748B]">/100</span>
                 </div>
+                <p className="mt-2 text-sm text-[#7C6312]">
+                  {session.status === "completed"
+                    ? "Gabungan skor jawaban dan ekspresi"
+                    : "Menunggu semua jawaban selesai diproses"}
+                </p>
+              </div>
 
-                <div className="mt-6 grid gap-4 sm:grid-cols-3">
-                  <div className="rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC]/90 px-4 py-3 text-center shadow-sm">
-                    <p className="text-xs font-medium uppercase tracking-wide text-[#64748B]">
-                      Skor ekspresi
-                    </p>
-                    <p className="mt-1 text-2xl font-semibold tabular-nums text-[#0F172A]">
-                      {item.femScore}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC]/90 px-4 py-3 text-center shadow-sm">
-                    <p className="text-xs font-medium uppercase tracking-wide text-[#64748B]">
-                      Skor jawaban
-                    </p>
-                    <p className="mt-1 text-2xl font-semibold tabular-nums text-[#0F172A]">
-                      {item.llmScore}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-[#E2E8F0] bg-[#FAF6E8]/60 px-4 py-3 text-center shadow-sm">
-                    <p className="text-xs font-medium uppercase tracking-wide text-[#7C6312]">
-                      Skor overall
-                    </p>
-                    <p className="mt-1 text-2xl font-semibold tabular-nums text-[#0F172A]">
-                      {item.overallScore}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-8">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[#64748B]">
-                    Jawaban saya
-                  </p>
-                  <p className="mt-2 whitespace-pre-line text-sm leading-7 text-[#334155]">
-                    {item.answer}
+              <div className="grid w-full max-w-xl grid-cols-2 gap-4 sm:max-w-none sm:grid-cols-3 lg:w-auto">
+                <div className="rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC]/80 px-4 py-3 text-center shadow-sm">
+                  <p className="text-xs font-medium text-[#64748B]">Pertanyaan</p>
+                  <p className="mt-1 text-2xl font-semibold text-[#0F172A]">
+                    {session.totalQuestions}
                   </p>
                 </div>
-
-                <div className="mt-8">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[#64748B]">
-                    Evaluasi jawaban
-                  </p>
-                  <p className="mt-2 whitespace-pre-line text-sm leading-7 text-[#334155]">
-                    {item.evaluation}
+                <div className="rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC]/80 px-4 py-3 text-center shadow-sm">
+                  <p className="text-xs font-medium text-[#64748B]">Rata-rata ekspresi</p>
+                  <p className="mt-1 text-2xl font-semibold text-[#0F172A]">
+                    {avgExpression !== null ? avgExpression : "—"}
                   </p>
                 </div>
+                <div className="col-span-2 rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC]/80 px-4 py-3 text-center shadow-sm sm:col-span-1">
+                  <p className="text-xs font-medium text-[#64748B]">Rata-rata jawaban</p>
+                  <p className="mt-1 text-2xl font-semibold text-[#0F172A]">
+                    {avgAnswer !== null ? avgAnswer : "—"}
+                  </p>
+                </div>
+              </div>
+            </div>
 
-                <div className="mt-8">
-                  <button
-                    type="button"
-                    onClick={() => toggleOptimal(index)}
-                    className="rounded-full bg-[#0F172A] px-6 py-3 text-sm font-medium text-white shadow-sm transition hover:opacity-95"
+            {session.overallEvaluation && (
+              <div className="mt-10 rounded-2xl border border-[#E8D9A0]/60 bg-[#FAF6E8]/40 p-6">
+                <p className="text-sm font-semibold text-[#7C6312]">Evaluasi Overall</p>
+                <p className="mt-3 whitespace-pre-line text-sm leading-7 text-[#334155]">
+                  {session.overallEvaluation}
+                </p>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Per-question results */}
+        {session && (
+          <section className="mt-10 space-y-8">
+            <div className="px-1">
+              <p className="text-sm font-medium uppercase tracking-[0.2em] text-[#7C6312]">
+                Detail per pertanyaan
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-[#0F172A]">
+                Hasil tiap pertanyaan
+              </h2>
+            </div>
+
+            {session.generatedQuestions.map((q) => {
+              const answer = answerMap.get(q.questionNumber)
+
+              if (!answer) {
+                // Question not yet submitted
+                return (
+                  <div
+                    key={q.questionId}
+                    className="rounded-[28px] border border-[#E2E8F0] bg-white/90 p-8 opacity-60 shadow-sm backdrop-blur"
                   >
-                    {showOptimal ? "Sembunyikan Jawaban Optimal" : "Generate Optimal Answer"}
-                  </button>
-                </div>
-
-                {showOptimal ? (
-                  <div className="mt-6 rounded-2xl border border-[#C9A227]/35 bg-[#FFFCF0] p-6 shadow-sm">
-                    <p className="text-sm font-semibold text-[#7C6312]">JAWABAN OPTIMAL</p>
-                    <p className="mt-3 whitespace-pre-line text-sm leading-7 text-[#334155]">
-                      {item.optimalAnswer}
-                    </p>
+                    <div className="flex gap-3">
+                      <span className="inline-flex h-9 min-w-[2.25rem] items-center justify-center rounded-full bg-[#E2E8F0] px-3 text-sm font-semibold text-[#64748B]">
+                        {q.questionNumber}
+                      </span>
+                      <p className="text-base font-medium text-[#334155]">{q.questionText}</p>
+                    </div>
+                    <p className="mt-4 text-sm text-[#94A3B8]">Belum ada jawaban untuk pertanyaan ini.</p>
                   </div>
-                ) : null}
-              </article>
-            )
-          })}
-        </section>
+                )
+              }
+
+              if (answer.processingStatus === "completed") {
+                return <CompletedCard key={q.questionId} answer={answer} />
+              }
+
+              return <ProcessingCard key={q.questionId} answer={answer} />
+            })}
+          </section>
+        )}
 
         <div className="mt-12 flex flex-wrap justify-center gap-4">
           <Link

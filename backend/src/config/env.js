@@ -10,4 +10,7 @@ export const env = {
   mongoUri:
     process.env.MONGODB_URI ||
     "mongodb://root:example@localhost:27017/vagmiai?authSource=admin",
+  geminiEvalModel: process.env.GEMINI_EVAL_MODEL || "google/gemini-2.5-flash",
+  agendaConcurrency: Number(process.env.AGENDA_CONCURRENCY) || 2,
+  sharedDataDir: process.env.SHARED_DATA_DIR || "../shared_data",
 };
