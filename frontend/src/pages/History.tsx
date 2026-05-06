@@ -25,6 +25,7 @@ function History() {
   const [sessions, setSessions] = useState<HistorySession[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const fetchHistory = useCallback(async () => {
     try {
@@ -46,6 +47,34 @@ function History() {
   useEffect(() => {
     void fetchHistory()
   }, [fetchHistory])
+
+  const handleDeleteSession = async (sessionId: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const confirmed = confirm(
+      "Apakah Anda yakin ingin menghapus sesi ini? Tindakan ini tidak dapat dibatalkan."
+    )
+    if (!confirmed) return
+
+    setDeletingId(sessionId)
+    try {
+      const token = localStorage.getItem("vagmiai_auth_token")
+      const res = await fetch(`${getApiBaseUrl()}/api/sessions/${sessionId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.message || "Gagal menghapus sesi.")
+
+      // Remove deleted session from state
+      setSessions((prev) => prev.filter((s) => s._id !== sessionId))
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   function getStatusLabel(status: string) {
     switch (status) {
@@ -178,9 +207,37 @@ function History() {
                           </p>
                         </div>
                       </div>
-                      <p className="mt-4 text-sm font-medium text-[#C9A227] transition group-hover:text-[#7C6312]">
-                        Lihat detail hasil →
-                      </p>
+                      <div className="mt-4 flex items-center justify-between">
+                        <p className="text-sm font-medium text-[#C9A227] transition group-hover:text-[#7C6312]">
+                          Lihat detail hasil →
+                        </p>
+                        <button
+                          onClick={(e) => handleDeleteSession(session._id, e)}
+                          disabled={deletingId === session._id}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-[#FECACA] bg-[#FEF2F2] px-3 py-1.5 text-sm font-medium text-[#991B1B] transition hover:bg-[#FEE2E2] disabled:opacity-50"
+                          title="Hapus sesi"
+                        >
+                          {deletingId === session._id ? (
+                            <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#FECACA] border-t-[#991B1B]" />
+                          ) : (
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              className="h-4 w-4"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              strokeWidth={2}
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                              />
+                            </svg>
+                          )}
+                          {deletingId === session._id ? "Menghapus..." : "Hapus"}
+                        </button>
+                      </div>
                     </Link>
                   </li>
                 )

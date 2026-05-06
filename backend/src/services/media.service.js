@@ -22,6 +22,31 @@ export function getAudioDir() {
   return path.join(getSharedDataDir(), "audio");
 }
 
+/**
+ * Resolve a stored media path to an absolute path.
+ * Handles both relative paths (stored as "shared_data/video/...") and
+ * absolute paths. Uses SHARED_DATA_DIR in Docker, or falls back to
+ * local relative resolution.
+ */
+export function resolveMediaPath(storedPath) {
+  // If already absolute, return as-is
+  if (path.isAbsolute(storedPath)) {
+    return storedPath;
+  }
+
+  const sharedDataDir = getSharedDataDir();
+
+  // If stored path starts with "shared_data/", strip it and resolve against
+  // the actual shared data directory (which might be /data in Docker)
+  if (storedPath.startsWith("shared_data/")) {
+    const relativePath = storedPath.slice("shared_data/".length);
+    return path.join(sharedDataDir, relativePath);
+  }
+
+  // For any other relative path, resolve against shared data dir
+  return path.join(sharedDataDir, storedPath);
+}
+
 /** Ensure both media directories exist. */
 export function ensureMediaDirs() {
   const videoDir = getVideoDir();

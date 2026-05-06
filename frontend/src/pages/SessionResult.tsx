@@ -44,7 +44,11 @@ type SessionAnswer = {
   asrMetadata: { modelName: string; language: string; duration: number | null } | null
   femResult: {
     dominantEmotion: string
-    emotionDistribution: Record<string, number>
+    emotionDistribution: {
+      positive?: number
+      neutral?: number
+      negative?: number
+    }
     confidenceAverage: number
     expressionScore: number
   } | null
@@ -53,6 +57,7 @@ type SessionAnswer = {
   answerScore: number | null
   communicationScore: number | null
   expressionScore: number | null
+  expressionComment: string
   overallQuestionScore: number | null
   optimalAnswer: string
   processingStatus: ProcessingStatus
@@ -205,6 +210,9 @@ function CompletedCard({ answer }: { answer: SessionAnswer }) {
           </p>
           {answer.femSummary && (
             <p className="mt-1 text-xs text-[#64748B]">{answer.femSummary}</p>
+          )}
+          {answer.expressionComment && (
+            <p className="mt-2 text-sm text-[#334155]">{answer.expressionComment}</p>
           )}
         </div>
       )}

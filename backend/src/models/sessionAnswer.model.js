@@ -35,6 +35,7 @@ const sessionAnswerSchema = new mongoose.Schema(
     answerScore: { type: Number, default: null },
     communicationScore: { type: Number, default: null },
     expressionScore: { type: Number, default: null },
+    expressionComment: { type: String, default: "" },
     overallQuestionScore: { type: Number, default: null },
     optimalAnswer: { type: String, default: "" },
 

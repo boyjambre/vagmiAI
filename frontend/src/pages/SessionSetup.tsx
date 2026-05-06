@@ -206,9 +206,10 @@ function SessionSetup() {
                       <button
                         type="button"
                         onClick={() => removeLink(index)}
-                        className="shrink-0 rounded-full border border-[#E2E8F0] bg-white px-4 py-2.5 text-sm font-medium text-[#334155] transition hover:border-[#CBD5E1] hover:text-[#0F172A]"
+                        className="shrink-0 rounded-full border border-red-200 bg-white px-4 py-2.5 text-sm font-medium text-red-800 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600"
+                        title="Hapus link"
                       >
-                        Hapus
+                        ×
                       </button>
                     </div>
                   ))}

@@ -16,12 +16,11 @@ async function start() {
 
   // ── Agenda ────────────────────────────────────────────────────────────────
   try {
-    getAgenda(); // initialize singleton
-    defineProcessAnswerJob(); // register job definition
+    getAgenda(); 
+    defineProcessAnswerJob(); 
     await startAgenda();
   } catch (err) {
     console.error("Agenda startup failed:", err.message);
-    // Non-fatal — backend can still serve HTTP; Agenda will retry
   }
 
   // ── HTTP server ───────────────────────────────────────────────────────────

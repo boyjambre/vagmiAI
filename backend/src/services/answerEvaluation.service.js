@@ -8,7 +8,7 @@ const EVAL_MODEL =
  */
 function buildFemSummary(femResult) {
   if (!femResult) return "Analisis ekspresi wajah tidak tersedia.";
-  const { dominantEmotion, emotionDistribution, confidenceAverage } = femResult;
+  const { dominantEmotion, emotionDistribution, confidenceAverage, expressionScore } = femResult;
   const dist = emotionDistribution
     ? Object.entries(emotionDistribution)
         .map(([k, v]) => `${k}: ${v}%`)
@@ -17,7 +17,8 @@ function buildFemSummary(femResult) {
   return (
     `Ekspresi dominan: ${dominantEmotion ?? "tidak diketahui"}. ` +
     (dist ? `Distribusi emosi: ${dist}. ` : "") +
-    `Rata-rata confidence: ${confidenceAverage ?? 0}.`
+    `Rata-rata confidence: ${confidenceAverage ?? 0}. ` +
+    `Skor ekspresi FEM: ${expressionScore ?? "tidak tersedia"}.`
   );
 }
 
@@ -53,21 +54,24 @@ ATURAN PENTING:
 - Gunakan Bahasa Indonesia KECUALI jika pertanyaan dan jawaban kandidat jelas dalam Bahasa Inggris.
 - Jangan mengarang fakta atau pengalaman yang tidak ada dalam transkrip atau konteks.
 - Jika transkrip kosong, sangat pendek, atau tidak relevan, beri skor rendah dan jelaskan alasannya.
-- FEM (analisis ekspresi wajah) hanya sebagai bukti pendukung, bukan penentu utama skor.
+- FEM (analisis ekspresi wajah) adalah data tentang ekspresi wajah kandidat selama menjawab. WAJIB gunakan skor ekspresi FEM dan data tersebut untuk mengomentari ekspresi mereka di field "expressionComment". Jelaskan apa yang diindikasikan skor ekspresi dan emosi dominan tentang demeanor kandidat.
+- JANGAN tambahkan field "expressionScore" dalam JSON output — skor tersebut sudah dihitung oleh sistem FEM secara otomatis, bukan oleh LLM.
 - Skala skor: 0–100.
 
 Return JSON only, tanpa markdown, penjelasan, atau teks tambahan. Schema wajib:
 {
   "answerScore": number,
   "communicationScore": number,
-  "expressionScore": number,
+  "expressionComment": string,
   "overallQuestionScore": number,
   "strengths": [string],
   "weaknesses": [string],
   "evaluation": string,
   "improvementSuggestions": [string],
   "optimalAnswer": string
-}`;
+}
+
+CATATAN PENTING: Field "expressionComment" HARUS selalu diisi dengan analisis singkat tentang ekspresi dan bahasa tubuh kandidat berdasarkan data FEM yang disediakan. Jangan kosongkan field ini.`;
 
   const prompt = `Evaluasi jawaban wawancara berikut:
 
@@ -90,16 +94,30 @@ ${linksContext || "Tidak tersedia."}
 === HASIL ANALISIS EKSPRESI WAJAH (FEM) ===
 ${femSummary}
 
+INSTRUKSI KHUSUS: Berdasarkan data FEM di atas, berikan komentar detail di field "expressionComment" tentang ekspresi wajah dan demeanor kandidat.
+
 Berikan evaluasi lengkap sesuai schema JSON yang ditentukan.`;
 
   try {
     const result = await callOpenRouter(prompt, systemPrompt, EVAL_MODEL);
 
     // Validate and provide safe fallbacks for all required fields
+    const femScore = femResult?.expressionScore != null 
+      ? safeScore(femResult.expressionScore)
+      : null;
+    
+    // Log FEM score for debugging
+    if (femResult?.expressionScore != null) {
+      console.log(`[evaluateAnswer] FEM score: ${femResult.expressionScore}, safeScore result: ${femScore}`);
+    } else {
+      console.log(`[evaluateAnswer] FEM not available or score missing`);
+    }
+    
     return {
       answerScore: safeScore(result.answerScore),
       communicationScore: safeScore(result.communicationScore),
-      expressionScore: safeScore(result.expressionScore, femResult?.expressionScore),
+      expressionScore: femScore,
+      expressionComment: result.expressionComment ?? "",
       overallQuestionScore: safeScore(result.overallQuestionScore),
       strengths: Array.isArray(result.strengths) ? result.strengths : [],
       weaknesses: Array.isArray(result.weaknesses) ? result.weaknesses : [],

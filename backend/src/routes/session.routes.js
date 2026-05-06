@@ -5,6 +5,7 @@ import {
   getSessionById,
   getSessionResults,
   getSessionHistory,
+  deleteSession,
 } from "../controllers/session.controller.js";
 
 const router = Router();
@@ -22,5 +23,8 @@ router.get("/:sessionId", getSessionById);
 
 // GET /api/sessions/:sessionId/results  — full results for SessionResult page
 router.get("/:sessionId/results", getSessionResults);
+
+// DELETE /api/sessions/:sessionId  — delete session and related answers
+router.delete("/:sessionId", deleteSession);
 
 export default router;

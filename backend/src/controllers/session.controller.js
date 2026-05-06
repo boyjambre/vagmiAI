@@ -188,3 +188,40 @@ export const createSession = async (req, res) => {
     });
   }
 };
+
+/**
+ * DELETE /api/sessions/:sessionId
+ * Deletes a session and all related SessionAnswer documents.
+ */
+export const deleteSession = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { sessionId } = req.params;
+
+    if (!mongoose.isValidObjectId(sessionId)) {
+      return res.status(400).json({ success: false, message: "Invalid sessionId." });
+    }
+
+    // Verify session exists and belongs to user
+    const session = await Session.findOne({ _id: sessionId, userId });
+    if (!session) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Session not found or access denied." });
+    }
+
+    // Delete all related SessionAnswer documents
+    await SessionAnswer.deleteMany({ sessionId, userId });
+
+    // Delete the session
+    await Session.deleteOne({ _id: sessionId, userId });
+
+    return res.status(200).json({
+      success: true,
+      message: "Session deleted successfully.",
+    });
+  } catch (error) {
+    console.error("deleteSession error:", error.message);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};

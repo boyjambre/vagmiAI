@@ -53,20 +53,27 @@ export const callFemAnalyzeVideo = async (videoAbsPath, maxFrames = 10) => {
   form.append("video_file", fs.createReadStream(videoAbsPath));
   form.append("max_frames", String(maxFrames));
 
-  const response = await aiApi.post("/fem/analyze-video", form, {
-    headers: form.getHeaders(),
-    timeout: 1000 * 60 * 10,
-  });
+  try {
+    const response = await aiApi.post("/fem/analyze-video", form, {
+      headers: form.getHeaders(),
+      timeout: 1000 * 60 * 10,
+    });
 
-  const data = response.data;
+    const data = response.data;
 
-  return {
-    dominantEmotion: data.dominant_emotion ?? "neutral",
-    emotionDistribution: data.emotion_distribution ?? {},
-    frameResults: data.frame_results ?? [],
-    confidenceAverage: data.confidence_average ?? 0,
-    expressionScore: data.expression_score ?? 50,
-  };
+    return {
+      dominantEmotion: data.dominant_emotion ?? "neutral",
+      emotionDistribution: data.emotion_distribution ?? {},
+      frameResults: data.frame_results ?? [],
+      confidenceAverage: data.confidence_average ?? 0,
+      expressionScore: data.expression_score ?? null,
+    };
+  } catch (error) {
+    const detail = error.response?.data?.detail ?? error.message;
+    const message = `FEM API failed: ${detail}`;
+    console.error(`[callFemAnalyzeVideo] ${message}`);
+    throw new Error(message);
+  }
 };
 
 // Keep old exports for backwards compatibility if anything still uses them

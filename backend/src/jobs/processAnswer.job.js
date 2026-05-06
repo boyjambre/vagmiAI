@@ -7,6 +7,7 @@ import {
   getAudioDir,
   buildMediaFilename,
   extractAudio,
+  resolveMediaPath,
 } from "../services/media.service.js";
 import { callAsrTranscribe, callFemAnalyzeVideo } from "../services/ai.service.js";
 import { evaluateAnswer } from "../services/answerEvaluation.service.js";
@@ -42,7 +43,7 @@ export function defineProcessAnswerJob() {
       // ── Step 2: Extract audio ────────────────────────────────────────────
       let audioRelPath = "";
       try {
-        const videoAbsPath = path.resolve(process.cwd(), "..", answer.videoPath);
+        const videoAbsPath = resolveMediaPath(answer.videoPath);
         const audioFilename = buildMediaFilename(
           sessionId,
           answerId,
@@ -71,7 +72,7 @@ export function defineProcessAnswerJob() {
       let transcript = "";
       let asrMetadata = null;
       try {
-        const audioAbsPath = path.resolve(process.cwd(), "..", audioRelPath);
+        const audioAbsPath = resolveMediaPath(audioRelPath);
         const asrResult = await callAsrTranscribe(audioAbsPath);
         transcript = asrResult.transcript;
         asrMetadata = asrResult.metadata;
@@ -93,9 +94,11 @@ export function defineProcessAnswerJob() {
       let femResult = null;
       let femSummary = "";
       try {
-        const videoAbsPath = path.resolve(process.cwd(), "..", answer.videoPath);
+        const videoAbsPath = resolveMediaPath(answer.videoPath);
         const maxFrames = Number(process.env.MAX_FEM_FRAMES) || 10;
+        console.log(`[process-answer] Starting FEM for ${answerId}, video: ${videoAbsPath}`);
         femResult = await callFemAnalyzeVideo(videoAbsPath, maxFrames);
+        console.log(`[process-answer] FEM succeeded for ${answerId}: score=${femResult?.expressionScore}, emotion=${femResult?.dominantEmotion}`);
         femSummary = femResult
           ? `Ekspresi dominan: ${femResult.dominantEmotion}. Skor ekspresi: ${femResult.expressionScore}.`
           : "";
@@ -106,7 +109,11 @@ export function defineProcessAnswerJob() {
           processingStatus: "fem_completed",
         });
       } catch (err) {
-        console.error(`[process-answer] FEM failed for ${answerId}:`, err.message);
+        const femDetail = err.response?.data?.detail ?? err.message;
+        console.error(
+          `[process-answer] FEM FAILED answerId=${answerId} video=${resolveMediaPath(answer.videoPath)}:`,
+          femDetail
+        );
         // Continue with null FEM — evaluation will use transcript only
         await SessionAnswer.findByIdAndUpdate(answerId, {
           processingError: `FEM failed: ${err.message}`,
@@ -149,6 +156,7 @@ export function defineProcessAnswerJob() {
           answerScore: evalResult.answerScore,
           communicationScore: evalResult.communicationScore,
           expressionScore: evalResult.expressionScore,
+          expressionComment: evalResult.expressionComment,
           overallQuestionScore: evalResult.overallQuestionScore,
           optimalAnswer: evalResult.optimalAnswer,
           femSummary: evalResult.femSummary || femSummary,
