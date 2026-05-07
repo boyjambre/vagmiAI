@@ -1,28 +1,28 @@
 import fs from "fs";
 import path from "path";
-import { createRequire } from "module";
-
-const require = createRequire(import.meta.url);
-const pdfParse = require("pdf-parse");
 
 export const getCvContext = async (user) => {
   if (!user || !user.cv || !user.cv.filename) {
-    return "No CV provided.";
+    return "CV_NOT_AVAILABLE";
   }
 
   try {
+    // Dynamic import ensures cross-platform ESM/CJS compatibility
+    const pdfParseModule = await import("pdf-parse");
+    const pdfParse = pdfParseModule.default || pdfParseModule;
+
     const uploadDir =
       process.env.UPLOAD_PATH || path.resolve(process.cwd(), "../shared_data/cv");
     const cvPath = path.join(uploadDir, user.cv.filename);
 
     if (!fs.existsSync(cvPath)) {
       console.warn(`CV file not found at path: ${cvPath}`);
-      return "CV file missing.";
+      return "CV_NOT_AVAILABLE";
     }
 
     // Only process PDF for now
     if (!user.cv.filename.toLowerCase().endsWith(".pdf")) {
-      return "CV is not a PDF. Skipping text extraction.";
+      return "CV_NOT_AVAILABLE";
     }
 
     const dataBuffer = fs.readFileSync(cvPath);
@@ -36,9 +36,9 @@ export const getCvContext = async (user) => {
     const truncatedText =
       text.length > charLimit ? text.substring(0, charLimit) + "..." : text;
 
-    return `Extracted CV Text:\n${truncatedText}`;
+    return `CV_AVAILABLE:${truncatedText}`;
   } catch (error) {
     console.error("Failed to extract CV context:", error.message);
-    return "Failed to extract CV context.";
+    return "CV_NOT_AVAILABLE";
   }
 };
