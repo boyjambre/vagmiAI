@@ -1,14 +1,14 @@
 import fs from "fs";
 import path from "path";
 import mongoose from "mongoose";
-import { Session } from "../models/session.model.js";
-import { SessionAnswer } from "../models/sessionAnswer.model.js";
+import { Session } from "../models/sessionModel.js";
+import { SessionAnswer } from "../models/sessionAnswerModel.js";
 import {
   getVideoDir,
   buildMediaFilename,
   ensureMediaDirs,
-} from "../services/media.service.js";
-import { enqueueProcessAnswerJob } from "../jobs/processAnswer.job.js";
+} from "../services/mediaService.js";
+import { enqueueProcessAnswerJob } from "../jobs/processAnswerJob.js";
 
 /**
  * POST /api/answers/submit
@@ -18,7 +18,6 @@ export const submitAnswer = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    // ── 1. Validate fields ────────────────────────────────────────────────
     const { sessionId, questionId, questionNumber, questionText } = req.body;
 
     if (!sessionId || !mongoose.isValidObjectId(sessionId)) {
@@ -39,7 +38,6 @@ export const submitAnswer = async (req, res) => {
 
     const qNum = Number(questionNumber);
 
-    // ── 2. Validate session belongs to user ───────────────────────────────
     const session = await Session.findOne({ _id: sessionId, userId });
     if (!session) {
       return res
@@ -47,7 +45,6 @@ export const submitAnswer = async (req, res) => {
         .json({ success: false, message: "Session not found or access denied." });
     }
 
-    // ── 3. Validate questionId/questionNumber exist in session ────────────
     const matchedQuestion = session.generatedQuestions.find(
       (q) => q.questionId === questionId && q.questionNumber === qNum
     );
@@ -58,7 +55,6 @@ export const submitAnswer = async (req, res) => {
       });
     }
 
-    // ── 4. Create SessionAnswer doc first to get answerId ─────────────────
     let answerDoc;
     try {
       answerDoc = await SessionAnswer.findOneAndUpdate(
@@ -87,7 +83,6 @@ export const submitAnswer = async (req, res) => {
 
     const answerId = answerDoc._id.toString();
 
-    // ── 5. Save video to shared_data/video ───────────────────────────────
     ensureMediaDirs();
     const ext =
       req.file.originalname.match(/\.(webm|mp4|mov|mkv|ogv)$/i)?.[1] ?? "webm";
@@ -98,7 +93,6 @@ export const submitAnswer = async (req, res) => {
 
     const videoRelPath = path.join("shared_data", "video", videoFilename);
 
-    // ── 6. Update answer with video path + reset status ──────────────────
     await SessionAnswer.findByIdAndUpdate(answerId, {
       videoPath: videoRelPath,
       processingStatus: "queued",
@@ -115,10 +109,8 @@ export const submitAnswer = async (req, res) => {
       optimalAnswer: "",
     });
 
-    // ── 7. Update session status to "processing" ─────────────────────────
     await Session.findByIdAndUpdate(sessionId, { status: "processing" });
 
-    // ── 8. Enqueue Agenda job ─────────────────────────────────────────────
     await enqueueProcessAnswerJob({
       answerId,
       sessionId,
@@ -126,7 +118,6 @@ export const submitAnswer = async (req, res) => {
       questionNumber: qNum,
     });
 
-    // ── 9. Return immediately ─────────────────────────────────────────────
     return res.status(202).json({
       success: true,
       message: "Answer uploaded and queued for processing.",

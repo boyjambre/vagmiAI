@@ -1,9 +1,9 @@
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
-import { Session } from "../models/session.model.js";
-import { SessionAnswer } from "../models/sessionAnswer.model.js";
-import { generateInterviewQuestions } from "../services/questionGeneration.service.js";
-import { User } from "../models/user.model.js";
+import { Session } from "../models/sessionModel.js";
+import { SessionAnswer } from "../models/sessionAnswerModel.js";
+import { generateInterviewQuestions } from "../services/questionGenerationService.js";
+import { User } from "../models/userModel.js";
 
 /**
  * GET /api/sessions/:sessionId

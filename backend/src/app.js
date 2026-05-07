@@ -3,12 +3,12 @@ import cors from "cors";
 import morgan from "morgan";
 import path from "path";
 
-import authRoutes from "./routes/auth.routes.js";
-import orchestrationRoutes from "./routes/orchestration.routes.js";
-import profileRoutes from "./routes/profile.routes.js";
-import questionGenerationRoutes from "./routes/questionGeneration.routes.js";
-import sessionRoutes from "./routes/session.routes.js";
-import answerProcessingRoutes from "./routes/answerProcessing.routes.js";
+import authRoutes from "./routes/authRoutes.js";
+import orchestrationRoutes from "./routes/orchestrationRoutes.js";
+import profileRoutes from "./routes/profileRoutes.js";
+import questionGenerationRoutes from "./routes/questionGenerationRoutes.js";
+import sessionRoutes from "./routes/sessionRoutes.js";
+import answerProcessingRoutes from "./routes/answerProcessingRoutes.js";
 
 const app = express();
 

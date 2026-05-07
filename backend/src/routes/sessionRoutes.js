@@ -1,12 +1,12 @@
 import { Router } from "express";
-import { requireAuth } from "../middlewares/auth.middleware.js";
+import { requireAuth } from "../middlewares/authMiddleware.js";
 import {
   createSession,
   getSessionById,
   getSessionResults,
   getSessionHistory,
   deleteSession,
-} from "../controllers/session.controller.js";
+} from "../controllers/sessionController.js";
 
 const router = Router();
 

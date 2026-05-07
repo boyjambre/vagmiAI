@@ -1,5 +1,5 @@
-import { User } from "../models/user.model.js";
-import { generateInterviewQuestions } from "../services/questionGeneration.service.js";
+import { User } from "../models/userModel.js";
+import { generateInterviewQuestions } from "../services/questionGenerationService.js";
 
 export const generateQuestionsController = async (req, res) => {
   try {

@@ -1,7 +1,7 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
-import { User } from "../models/user.model.js";
+import { User } from "../models/userModel.js";
 
 const normalizeEmail = (email) => String(email ?? "").trim().toLowerCase();
 

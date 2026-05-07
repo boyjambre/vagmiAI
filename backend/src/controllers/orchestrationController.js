@@ -2,7 +2,7 @@ import {
     getAiHealth,
     sendAsrJob,
     sendFemJob,
-  } from "../services/ai.service.js";
+  } from "../services/aiService.js";
   
   export const checkAiHealth = async (req, res) => {
     try {

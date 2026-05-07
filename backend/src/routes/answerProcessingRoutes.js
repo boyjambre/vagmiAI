@@ -1,10 +1,10 @@
 import { Router } from "express";
-import { requireAuth } from "../middlewares/auth.middleware.js";
-import { uploadAnswerVideo } from "../middlewares/upload.middleware.js";
+import { requireAuth } from "../middlewares/authMiddleware.js";
+import { uploadAnswerVideo } from "../middlewares/uploadMiddleware.js";
 import {
   submitAnswer,
   getAnswerById,
-} from "../controllers/answerProcessing.controller.js";
+} from "../controllers/answerProcessingController.js";
 
 const router = Router();
 

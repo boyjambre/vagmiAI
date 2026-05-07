@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { generateQuestionsController } from "../controllers/questionGeneration.controller.js";
-import { requireAuth } from "../middlewares/auth.middleware.js";
+import { generateQuestionsController } from "../controllers/questionGenerationController.js";
+import { requireAuth } from "../middlewares/authMiddleware.js";
 
 const router = Router();
 

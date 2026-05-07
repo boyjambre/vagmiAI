@@ -3,7 +3,7 @@ import {
   checkAiHealth,
   processAsrJob,
   processFemJob,
-} from "../controllers/orchestration.controller.js";
+} from "../controllers/orchestrationController.js";
 
 const router = Router();
 

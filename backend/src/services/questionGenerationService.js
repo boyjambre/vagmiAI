@@ -1,7 +1,7 @@
-import { generateQuestions } from "./openRouter.service.js";
-import { getTavilyContext } from "./tavily.service.js";
-import { getLinksContext } from "./linkContext.service.js";
-import { getCvContext } from "./cvContext.service.js";
+import { generateQuestions } from "./openRouterService.js";
+import { getTavilyContext } from "./tavilyService.js";
+import { getLinksContext } from "./linkContextService.js";
+import { getCvContext } from "./cvContextService.js";
 
 export const generateInterviewQuestions = async ({
   user,

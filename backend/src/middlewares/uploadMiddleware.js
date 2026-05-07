@@ -3,7 +3,6 @@ import path from "path";
 import crypto from "crypto";
 import fs from "fs";
 
-// ── CV upload (existing) ─────────────────────────────────────────────────────
 
 const cvStorage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -40,7 +39,6 @@ export const uploadCV = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
 });
 
-// ── Video upload for answers ─────────────────────────────────────────────────
 
 /**
  * Use memoryStorage so we can manually write the file to shared_data/video

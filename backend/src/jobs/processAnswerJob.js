@@ -1,18 +1,18 @@
 import path from "path";
-import { SessionAnswer } from "../models/sessionAnswer.model.js";
-import { Session } from "../models/session.model.js";
-import { User } from "../models/user.model.js";
+import { SessionAnswer } from "../models/sessionAnswerModel.js";
+import { Session } from "../models/sessionModel.js";
+import { User } from "../models/userModel.js";
 import {
   getVideoDir,
   getAudioDir,
   buildMediaFilename,
   extractAudio,
   resolveMediaPath,
-} from "../services/media.service.js";
-import { callAsrTranscribe, callFemAnalyzeVideo } from "../services/ai.service.js";
-import { evaluateAnswer } from "../services/answerEvaluation.service.js";
-import { getCvContext } from "../services/cvContext.service.js";
-import { getAgenda } from "../services/agenda.service.js";
+} from "../services/mediaService.js";
+import { callAsrTranscribe, callFemAnalyzeVideo } from "../services/aiService.js";
+import { evaluateAnswer } from "../services/answerEvaluationService.js";
+import { getCvContext } from "../services/cvContextService.js";
+import { getAgenda } from "../services/agendaService.js";
 
 export const JOB_NAME = "process-answer";
 
@@ -29,7 +29,6 @@ export function defineProcessAnswerJob() {
     async (job) => {
       const { answerId, sessionId } = job.attrs.data;
 
-      // ── Step 1: Load answer ─────────────────────────────────────────────
       const answer = await SessionAnswer.findById(answerId);
       if (!answer) {
         throw new Error(`SessionAnswer not found: ${answerId}`);
@@ -40,7 +39,6 @@ export function defineProcessAnswerJob() {
         processingError: "",
       });
 
-      // ── Step 2: Extract audio ────────────────────────────────────────────
       let audioRelPath = "";
       try {
         const videoAbsPath = resolveMediaPath(answer.videoPath);
@@ -68,7 +66,6 @@ export function defineProcessAnswerJob() {
         return;
       }
 
-      // ── Step 3: ASR ──────────────────────────────────────────────────────
       let transcript = "";
       let asrMetadata = null;
       try {
@@ -90,7 +87,6 @@ export function defineProcessAnswerJob() {
         });
       }
 
-      // ── Step 4: FEM ──────────────────────────────────────────────────────
       let femResult = null;
       let femSummary = "";
       try {
@@ -120,7 +116,6 @@ export function defineProcessAnswerJob() {
         });
       }
 
-      // ── Step 5: Gemini answer evaluation ────────────────────────────────
       await SessionAnswer.findByIdAndUpdate(answerId, {
         processingStatus: "evaluating",
       });
@@ -172,7 +167,6 @@ export function defineProcessAnswerJob() {
         return;
       }
 
-      // ── Step 6: Update session aggregate score ───────────────────────────
       try {
         await updateSessionSummary(sessionId);
       } catch (err) {
