@@ -41,6 +41,8 @@ type SessionAnswer = {
   questionNumber: number
   questionText: string
   transcript: string
+  videoPath?: string
+  audioPath?: string
   asrMetadata: { modelName: string; language: string; duration: number | null } | null
   femResult: {
     dominantEmotion: string
@@ -128,6 +130,9 @@ function ScorePill({
 }
 
 function ProcessingCard({ answer }: { answer: SessionAnswer }) {
+  const [showMedia, setShowMedia] = useState(false)
+  const hasMedia = answer.videoPath || answer.audioPath
+
   return (
     <div className="rounded-[28px] border border-[#E2E8F0] bg-white/90 p-8 shadow-sm backdrop-blur lg:p-10">
       <div className="flex flex-wrap items-baseline gap-3">
@@ -153,12 +158,71 @@ function ProcessingCard({ answer }: { answer: SessionAnswer }) {
       {answer.processingError ? (
         <p className="mt-4 text-xs text-[#DC2626]">{answer.processingError}</p>
       ) : null}
+
+      {/* Media Toggle */}
+      {hasMedia && (
+        <div className="mt-6">
+          <button
+            type="button"
+            onClick={() => setShowMedia((v) => !v)}
+            className="inline-flex items-center gap-2 rounded-full border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-2 text-sm font-medium text-[#64748B] transition hover:border-[#CBD5E1] hover:text-[#0F172A]"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`transition-transform ${showMedia ? "rotate-180" : ""}`}
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+            {showMedia ? "Sembunyikan Rekaman" : "Lihat Rekaman"}
+          </button>
+
+          {/* Media Players */}
+          {showMedia && (
+            <div className="mt-4 space-y-4">
+              {answer.videoPath && (
+                <div className="rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#64748B] mb-3">
+                    Rekaman Video
+                  </p>
+                  <video
+                    controls
+                    className="w-full rounded-xl"
+                    src={`${getApiBaseUrl()}/media/video/${answer.videoPath.replace(/^shared_data\/video\//, '')}`}
+                  />
+                </div>
+              )}
+              {answer.audioPath && (
+                <div className="rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#64748B] mb-3">
+                    Rekaman Audio
+                  </p>
+                  <audio
+                    controls
+                    className="w-full"
+                    src={`${getApiBaseUrl()}/media/audio/${answer.audioPath.replace(/^shared_data\/audio\//, '')}`}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
 function CompletedCard({ answer }: { answer: SessionAnswer }) {
   const [showOptimal, setShowOptimal] = useState(false)
+  const [showMedia, setShowMedia] = useState(false)
+  const hasMedia = answer.videoPath || answer.audioPath
 
   return (
     <article className="rounded-[28px] border border-[#E2E8F0] bg-white/90 p-8 shadow-sm backdrop-blur lg:p-10">
@@ -178,6 +242,63 @@ function CompletedCard({ answer }: { answer: SessionAnswer }) {
         <ScorePill label="Ekspresi" value={answer.expressionScore} />
         <ScorePill label="Skor overall" value={answer.overallQuestionScore} accent />
       </div>
+
+      {/* Media Toggle */}
+      {hasMedia && (
+        <div className="mt-6">
+          <button
+            type="button"
+            onClick={() => setShowMedia((v) => !v)}
+            className="inline-flex items-center gap-2 rounded-full border border-[#E2E8F0] bg-[#F8FAFC] px-4 py-2 text-sm font-medium text-[#64748B] transition hover:border-[#CBD5E1] hover:text-[#0F172A]"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`transition-transform ${showMedia ? "rotate-180" : ""}`}
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+            {showMedia ? "Sembunyikan Rekaman" : "Lihat Rekaman"}
+          </button>
+
+          {/* Media Players */}
+          {showMedia && (
+            <div className="mt-4 space-y-4">
+              {answer.videoPath && (
+                <div className="rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#64748B] mb-3">
+                    Rekaman Video
+                  </p>
+                  <video
+                    controls
+                    className="w-full rounded-xl"
+                    src={`${getApiBaseUrl()}/media/video/${answer.videoPath.replace(/^shared_data\/video\//, '')}`}
+                  />
+                </div>
+              )}
+              {answer.audioPath && (
+                <div className="rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#64748B] mb-3">
+                    Rekaman Audio
+                  </p>
+                  <audio
+                    controls
+                    className="w-full"
+                    src={`${getApiBaseUrl()}/media/audio/${answer.audioPath.replace(/^shared_data\/audio\//, '')}`}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Transcript */}
       {answer.transcript && (

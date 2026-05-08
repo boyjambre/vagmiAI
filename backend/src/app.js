@@ -9,6 +9,7 @@ import profileRoutes from "./routes/profileRoutes.js";
 import questionGenerationRoutes from "./routes/questionGenerationRoutes.js";
 import sessionRoutes from "./routes/sessionRoutes.js";
 import answerProcessingRoutes from "./routes/answerProcessingRoutes.js";
+import { getVideoDir, getAudioDir } from "./services/mediaService.js";
 
 const app = express();
 
@@ -33,5 +34,9 @@ app.use("/api/answers", answerProcessingRoutes);
 // Serve CV uploads statically
 const uploadDir = process.env.UPLOAD_PATH || path.resolve(process.cwd(), "../shared_data/cv");
 app.use("/uploads/cv", express.static(uploadDir));
+
+// Serve video and audio files statically
+app.use("/media/video", express.static(getVideoDir()));
+app.use("/media/audio", express.static(getAudioDir()));
 
 export default app;
