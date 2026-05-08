@@ -416,6 +416,7 @@ function SessionSetup() {
           <p className="text-sm leading-6 text-[#475569]">
             <span className="font-medium text-[#7C6312]">Catatan: </span>
             Informasi yang kamu masukkan membantu sistem menyusun pertanyaan yang lebih kontekstual.
+            Pastikan koneksi internet berjalan stabil agar proses pembuatan pertanyaan dan sesi wawancara berlangsung lancar.
             Sesi ini tersimpan otomatis di database dan dapat dilihat kembali di halaman Riwayat.
           </p>
         </section>

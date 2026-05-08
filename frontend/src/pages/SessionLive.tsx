@@ -443,7 +443,7 @@ function SessionLive() {
               </h1>
 
               <p className="mt-4 text-sm leading-6 text-[#64748B]">
-                Jawab dengan jelas dan tenang. Pandang kamera saat berbicara agar terasa natural.
+                Jawab dengan jelas dan tenang. Gunakan pelafalan kata yang jelas agar transkripsi lebih akurat. Pandang kamera saat berbicara agar terasa natural.
               </p>
 
               {recorderError ? (
