@@ -8,12 +8,6 @@ const aiApi = axios.create({
   timeout: 1000 * 60 * 10, // 10 min — ASR/FEM can be slow
 });
 
-/** GET /health */
-export const getAiHealth = async () => {
-  const response = await aiApi.get("/health");
-  return response.data;
-};
-
 /**
  * POST /asr/transcribe
  * Sends audio file as multipart upload.
@@ -76,13 +70,3 @@ export const callFemAnalyzeVideo = async (videoAbsPath, maxFrames = 10) => {
   }
 };
 
-// Keep old exports for backwards compatibility if anything still uses them
-export const sendAsrJob = async (payload) => {
-  const response = await aiApi.post("/jobs/asr/process", payload);
-  return response.data;
-};
-
-export const sendFemJob = async (payload) => {
-  const response = await aiApi.post("/jobs/fem/process", payload);
-  return response.data;
-};

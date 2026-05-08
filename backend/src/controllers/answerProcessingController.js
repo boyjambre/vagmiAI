@@ -135,29 +135,3 @@ export const submitAnswer = async (req, res) => {
   }
 };
 
-/**
- * GET /api/answers/:answerId
- * Returns processing status and result for one answer.
- */
-export const getAnswerById = async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const { answerId } = req.params;
-
-    if (!mongoose.isValidObjectId(answerId)) {
-      return res.status(400).json({ success: false, message: "Invalid answerId." });
-    }
-
-    const answer = await SessionAnswer.findOne({ _id: answerId, userId });
-    if (!answer) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Answer not found or access denied." });
-    }
-
-    return res.status(200).json({ success: true, data: answer });
-  } catch (error) {
-    console.error("getAnswerById error:", error.message);
-    return res.status(500).json({ success: false, message: error.message });
-  }
-};

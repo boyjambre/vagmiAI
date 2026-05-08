@@ -6,33 +6,6 @@ import { generateInterviewQuestions } from "../services/questionGenerationServic
 import { User } from "../models/userModel.js";
 
 /**
- * GET /api/sessions/:sessionId
- * Returns session metadata and generated questions (for SessionLive reload).
- */
-export const getSessionById = async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const { sessionId } = req.params;
-
-    if (!mongoose.isValidObjectId(sessionId)) {
-      return res.status(400).json({ success: false, message: "Invalid sessionId." });
-    }
-
-    const session = await Session.findOne({ _id: sessionId, userId });
-    if (!session) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Session not found or access denied." });
-    }
-
-    return res.status(200).json({ success: true, data: session });
-  } catch (error) {
-    console.error("getSessionById error:", error.message);
-    return res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-/**
  * GET /api/sessions/:sessionId/results
  * Returns session metadata and all answer results (for SessionResult page).
  */

@@ -4,9 +4,7 @@ import morgan from "morgan";
 import path from "path";
 
 import authRoutes from "./routes/authRoutes.js";
-import orchestrationRoutes from "./routes/orchestrationRoutes.js";
 import profileRoutes from "./routes/profileRoutes.js";
-import questionGenerationRoutes from "./routes/questionGenerationRoutes.js";
 import sessionRoutes from "./routes/sessionRoutes.js";
 import answerProcessingRoutes from "./routes/answerProcessingRoutes.js";
 import { getVideoDir, getAudioDir } from "./services/mediaService.js";
@@ -25,9 +23,7 @@ app.get("/health", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
-app.use("/api/orchestration", orchestrationRoutes);
 app.use("/api/profile", profileRoutes);
-app.use("/api/questions", questionGenerationRoutes);
 app.use("/api/sessions", sessionRoutes);
 app.use("/api/answers", answerProcessingRoutes);
 
