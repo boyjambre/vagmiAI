@@ -105,7 +105,7 @@ The JSON output must strictly follow this schema:
 
 Rules:
 - Generate exactly ${questionCount} questions.
-- Questions must be written in Indonesian unless the input context strongly indicates English.
+- Questions must be written in Indonesian
 - Avoid generic questions when job description provides specific context.
 - For HR / Behavioral interviews, focus on motivation, experience, teamwork, conflict, leadership, and career goals.
 - For Technical interviews, focus on role-relevant technical skills, project experience, tools, and problem solving.
