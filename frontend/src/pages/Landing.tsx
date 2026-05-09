@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
+import slide1 from "../assets/1.png"
+import slide2 from "../assets/2.png"
+import slide3 from "../assets/3.png"
 
 type Slide = {
   title: string
   description: string
   tag: string
   stat: string
+  image: string
 }
 
 function Landing() {
@@ -17,6 +21,7 @@ function Landing() {
           "Latih sesi wawancara yang realistis dengan pertanyaan berbasis AI yang disesuaikan dengan posisi yang kamu tuju.",
         tag: "Fitur Utama",
         stat: "Alur pertanyaan adaptif",
+        image: slide1,
       },
       {
         title: "Speech Transcription",
@@ -24,6 +29,7 @@ function Landing() {
           "Tinjau jawaban lisanmu melalui transkripsi otomatis dan umpan balik verbal yang terstruktur.",
         tag: "Multimodal",
         stat: "Evaluasi performa verbal",
+        image: slide2,
       },
       {
         title: "Analisis Ekspresi Wajah",
@@ -31,6 +37,7 @@ function Landing() {
           "Pahami cara penyampaian non-verbal melalui umpan balik berbasis ekspresi dan insight presentasi.",
         tag: "Analisis",
         stat: "Pelacakan sinyal non-verbal",
+        image: slide3,
       },
     ],
     [],
@@ -378,13 +385,12 @@ function Landing() {
                     </div>
 
                     <div className="p-5">
-                      <div className="rounded-[24px] border border-dashed border-[#CBD5E1] bg-white p-10 text-center shadow-sm">
-                        <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-3xl border border-[#E2E8F0] bg-[#F8FAFC] text-2xl font-semibold text-[#0F172A]">
-                          {currentSlide + 1}
-                        </div>
-                        <p className="text-sm text-[#64748B]">
-                          Letakkan screenshot fitur di sini nanti
-                        </p>
+                      <div className="overflow-hidden rounded-[24px] border border-[#E2E8F0] bg-white shadow-sm">
+                        <img
+                          src={slides[currentSlide].image}
+                          alt={slides[currentSlide].title}
+                          className="h-auto w-full object-cover"
+                        />
                       </div>
 
                       <div className="mt-5">
