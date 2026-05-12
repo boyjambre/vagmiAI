@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import slide1 from "../assets/1.png"
 import slide2 from "../assets/2.png"
 import slide3 from "../assets/3.png"
@@ -167,6 +167,7 @@ function Landing() {
     },
   ]
 
+  const navigate = useNavigate()
   const [activeSection, setActiveSection] = useState("about")
 
   useEffect(() => {
@@ -293,10 +294,20 @@ function Landing() {
               </p>
 
               <div className="mt-8 flex flex-wrap items-center gap-4">
-                <button className="rounded-full bg-[#0F172A] px-6 py-3 text-sm font-medium text-white shadow-sm transition hover:opacity-95">
+                <button
+                  onClick={() => navigate("/signin")}
+                  className="rounded-full bg-[#0F172A] px-6 py-3 text-sm font-medium text-white shadow-sm transition hover:opacity-95"
+                >
                   Mulai Latihan
                 </button>
-                <button className="rounded-full border border-[#E2E8F0] bg-white px-6 py-3 text-sm font-medium text-[#334155] transition hover:border-[#CBD5E1] hover:text-[#0F172A]">
+                <button
+                  onClick={() =>
+                    document
+                      .getElementById("features")
+                      ?.scrollIntoView({ behavior: "smooth" })
+                  }
+                  className="rounded-full border border-[#E2E8F0] bg-white px-6 py-3 text-sm font-medium text-[#334155] transition hover:border-[#CBD5E1] hover:text-[#0F172A]"
+                >
                   Jelajahi Fitur
                 </button>
               </div>
